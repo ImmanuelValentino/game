@@ -1,0 +1,72 @@
+{
+  "level": 1,
+  "exp": 0,
+  "exp_to_next": 100,
+  "max_hp": 100,
+  "hp": 100,
+  "max_stamina": 100,
+  "stamina": 100.0,
+  "gold": 50,
+  "monster_ash": 15,
+  "base_damage": 22,
+  "bonus_damage": 0,
+  "armor": 0,
+  "speed_bonus": 0.0,
+  "x": 544.0,
+  "y": 210.0,
+  "inventory": [
+    {
+      "id": "ancestral_blade",
+      "count": 1
+    },
+    {
+      "id": "hp_potion",
+      "count": 3
+    },
+    {
+      "id": "stamina_tonic",
+      "count": 2
+    },
+    {
+      "id": "monster_ash",
+      "count": 15
+    },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+  ],
+  "quest": {
+    "active_index": 0,
+    "quests": [
+      {
+        "id": "q1_awaken",
+        "current_count": 0,
+        "is_completed": false
+      },
+      {
+        "id": "q2_training",
+        "current_count": 0,
+        "is_completed": false
+      },
+      {
+        "id": "q3_supplies",
+        "current_count": 0,
+        "is_completed": false
+      },
+      {
+        "id": "q4_gate",
+        "current_count": 0,
+        "is_completed": false
+      }
+    ]
+  }
+}
