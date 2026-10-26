@@ -87,6 +87,19 @@ class MapLoader:
                     })
                 else:
                     print(f"[MapLoader] Image not found: {img_path}")
+                    # Create a placeholder magenta surface for missing tileset
+                    placeholder_cols = 10
+                    placeholder_rows = 10
+                    surf = pygame.Surface((ts_tw * placeholder_cols, ts_th * placeholder_rows), pygame.SRCALPHA)
+                    surf.fill((255, 0, 255, 255))  # Magenta
+                    self.tilesets.append({
+                        "firstgid": firstgid,
+                        "tilewidth": ts_tw,
+                        "tileheight": ts_th,
+                        "surface": surf,
+                        "cols": placeholder_cols,
+                        "rows": placeholder_rows
+                    })
 
         # Urutkan tileset menurun berdasarkan firstgid agar pencarian mudah
         self.tilesets.sort(key=lambda x: x["firstgid"], reverse=True)
@@ -96,7 +109,8 @@ class MapLoader:
             name = layer_elem.attrib.get("name")
             data_elem = layer_elem.find("data")
             if data_elem is not None and data_elem.text:
-                raw_gids = [int(v.strip()) for v in data_elem.text.strip().split(",") if v.strip()]
+                import re
+                raw_gids = [int(v) for v in re.split(r'[\s,]+', data_elem.text.strip()) if v]
                 self.layers[name] = raw_gids
 
         print(f"[MapLoader] TMX loaded: {len(self.tilesets)} tilesets, {len(self.layers)} layers.")
@@ -152,15 +166,12 @@ class MapLoader:
 
     def _pre_render_surfaces(self):
         self.ground_surface = pygame.Surface((self.map_width_px, self.map_height_px), pygame.SRCALPHA)
+        self.ground_surface.fill((30, 30, 30, 255))  # Dark gray background
         self.overhead_surface = pygame.Surface((self.map_width_px, self.map_height_px), pygame.SRCALPHA)
 
         # Layer order rendering
-        ground_layers = ["Tile Layer 1", "padi", "tebing", "jalan", "jembatan", "rumah", "castle", "door", "tree"]
-
-        for layer_name in ground_layers:
-            if layer_name not in self.layers:
-                continue
-            data = self.layers[layer_name]
+        # Render all layers in the order they appear in the TMX file (preserving original order)
+        for layer_name, data in self.layers.items():
             for idx, raw_gid in enumerate(data):
                 if raw_gid == 0:
                     continue
@@ -173,42 +184,62 @@ class MapLoader:
         print("[MapLoader] Pre-rendered ground surface created successfully.")
 
     def _build_colliders(self):
-        """Membangun collider rect dari layer rintangan."""
+        """Membangun collider rect dari layer rintangan.
+        This method now supports multiple wall layer names (e.g., "dinding", "tebing",
+        "castle", "rumah", "dinding bawah", "atas dinidng")."""
         water_gids = {496, 497, 498, 508}
         bridges = {i for i, gid in enumerate(self.layers.get("jembatan", [])) if gid != 0}
+        # Treat both 'door' and 'pintu' layers as passable doors
         doors = {i for i, gid in enumerate(self.layers.get("door", [])) if gid != 0}
+        doors.update({i for i, gid in enumerate(self.layers.get("pintu", [])) if gid != 0})
 
         blocked_indices = set()
         total_tiles = self.map_width_tiles * self.map_height_tiles
 
         tile1 = self.layers.get("Tile Layer 1", [])
-        tebing = self.layers.get("tebing", [])
-        castle = self.layers.get("castle", [])
-        rumah = self.layers.get("rumah", [])
+        # Gather possible wall layers, default to empty list if missing.
+        wall_layers = {
+            "tebing": self.layers.get("tebing", []),
+            "castle": self.layers.get("castle", []),
+            "rumah": self.layers.get("rumah", []),
+            "dinding": self.layers.get("dinding", []),
+            "dinding bawah": self.layers.get("dinding bawah", []),
+            "atas dinidng": self.layers.get("atas dinidng", []),
+        }
         trees = self.layers.get("tree", [])
 
         for i in range(total_tiles):
-            # Air laut di pantai
+            # Water blocks movement
             if i < len(tile1) and (tile1[i] & FLAGS_MASK) in water_gids:
                 blocked_indices.add(i)
-            # Tebing / cliff (kecuali ada jembatan)
-            elif i < len(tebing) and tebing[i] != 0 and i not in bridges:
+                continue
+            # Cliff / tebing (except bridges)
+            if i < len(wall_layers["tebing"]) and wall_layers["tebing"][i] != 0 and i not in bridges:
                 blocked_indices.add(i)
-            # Benteng & kastil (kecuali pintu)
-            elif i < len(castle) and castle[i] != 0 and i not in doors:
+                continue
+            # Castle walls (except doors)
+            if i < len(wall_layers["castle"]) and wall_layers["castle"][i] != 0 and i not in doors:
                 blocked_indices.add(i)
-            # Rumah (kecuali pintu)
-            elif i < len(rumah) and rumah[i] != 0 and i not in doors:
+                continue
+            # Rumah walls (except doors)
+            if i < len(wall_layers["rumah"]) and wall_layers["rumah"][i] != 0 and i not in doors:
                 blocked_indices.add(i)
-            # Pohon (hanya bagian batang/bawah pohon agar pemain bisa berjalan di bawah kanopi)
-            elif i < len(trees) and trees[i] != 0:
-                blocked_indices.add(i)
+                continue
+            # Generic wall layers
+            for name in ("dinding", "dinding bawah", "atas dinidng"):
+                layer = wall_layers.get(name, [])
+                if i < len(layer) and layer[i] != 0:
+                    blocked_indices.add(i)
+                    break
+            else:
+                # Trees (trunk only)
+                if i < len(trees) and trees[i] != 0:
+                    blocked_indices.add(i)
 
         self.colliders = []
         for idx in blocked_indices:
             tx = (idx % self.map_width_tiles) * self.tile_width
             ty = (idx // self.map_width_tiles) * self.tile_height
-            # Jika pohon, hanya batang bawah tengah yang memblokir
             if idx < len(trees) and trees[idx] != 0:
                 self.colliders.append(pygame.Rect(tx + 8, ty + 14, 16, 16))
             else:
@@ -231,3 +262,4 @@ class MapLoader:
     def draw(self, surface, camera_x, camera_y):
         """Merender bagian peta yang terlihat di kamera."""
         surface.blit(self.ground_surface, (-camera_x, -camera_y))
+        surface.blit(self.overhead_surface, (-camera_x, -camera_y))

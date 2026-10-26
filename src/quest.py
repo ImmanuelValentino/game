@@ -8,6 +8,7 @@ from src.config import (
     COLOR_WHITE, COLOR_GOLD, COLOR_TEXT, COLOR_TEXT_MUTED, COLOR_TEXT_ACCENT
 )
 from src.audio import audio_manager
+from src.combat import FloatingText
 
 class Quest:
     def __init__(self, qid, title, desc, target_count=1, exp_reward=50, gold_reward=25):
@@ -77,7 +78,7 @@ class QuestManager:
                         player.gold += q.gold_reward
                         if combat_mgr:
                             combat_mgr.floating_texts.append(
-                                combat_mgr.FloatingText(player.x + 24, player.y - 30, f"Quest Selesai: {q.title}!", COLOR_GOLD, font_size=18, is_crit=True)
+                                FloatingText(player.x + 24, player.y - 30, f"Quest Selesai: {q.title}!", COLOR_GOLD, font_size=18, is_crit=True)
                             )
                     if idx == self.active_index:
                         self.active_index += 1

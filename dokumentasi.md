@@ -1,5 +1,6 @@
 🎮 Ringkasan Fitur & Mekanika yang Diterapkan
 1. Integrasi Peta map1safeworld.tmx (Lobby / Safe Zone)
+2. Integrasi Peta dungeon1.tmx (Dungeon Level) – menambahkan dukungan wall layers (dinding, dinding bawah, atas dinidng) untuk collision.
 Render 14 Tileset Lengkap: Memuat seluruh layer (Tile Layer 1, padi, jalan, tebing, jembatan, rumah, castle, door, tree) dengan penanganan rotasi & flip tile (horizontal, vertical, diagonal) sesuai spesifikasi format Tiled.
 Kamera Halus (Smooth Follow): Kamera mengikuti pergerakan karakter dengan interpolasi (lerp) dan batas clamping pada ukuran map 1280x1280 px.
 Sistem Tabrakan (Collision): Otomatis mendeteksi air laut pantai, tebing (kecuali ada jembatan), tembok kastil, rumah, dan batang pohon agar pemain tidak menembus rintangan.

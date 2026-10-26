@@ -35,6 +35,8 @@ def main():
 
     # Inisialisasi Sistem Inti
     map_loader = MapLoader("map1safeworld.tmx")
+    # Track which maps have already spawned their monsters
+    spawned_maps = set()
     # Spawn player di jalan utama yang bebas hambatan (X=544, Y=210)
     player = Player(x=544, y=210)
     combat_mgr = CombatManager()
@@ -45,13 +47,29 @@ def main():
     ui_mgr = UIManager()
 
     # Inisialisasi NPC & Objek Interaktif di Lobby
+    # Function to switch maps
+    def switch_map(new_tmx, spawn_x, spawn_y):
+        nonlocal map_loader, player, all_npcs, combat_mgr, camera_x, camera_y
+        map_loader = MapLoader(new_tmx)
+        player.x = spawn_x
+        player.y = spawn_y
+        # Reset camera to center on new spawn point
+        camera_x = float(player.x - SCREEN_WIDTH / 2)
+        camera_y = float(player.y - SCREEN_HEIGHT / 2)
+        ui_mgr.show_notification(f"Berpindah ke {new_tmx}", duration=3.0)
+        audio_manager.play_music("bgm_dungeon" if "dungeon" in new_tmx else "bgm_lobby")
+        # Reset training targets and clear NPCs and floating texts for new area
+        training_targets.clear()
+        all_npcs.clear()
+        combat_mgr.floating_texts.clear()
+
     campfire = Campfire(x=544, y=256)
     elara = ElaraNPC(x=440, y=250)
     brog = BrogNPC(x=650, y=250)
     merchant = MerchantNPC(x=480, y=440)
     gatekeeper = GatekeeperNPC(x=864, y=120)
 
-    # Objek Latihan Tempur di Halaman Timur
+    # Objek Latihan Tempur di Halaman Timur (Lobby)
     training_targets = [
         TrainingTarget("Boneka Latihan A", 780, 360, max_hp=100, is_monster=False),
         TrainingTarget("Boneka Latihan B", 840, 360, max_hp=100, is_monster=False),
@@ -212,10 +230,12 @@ def main():
                                 "Tanah di sana beracun dan dipenuhi monster Karak berduri yang dipimpin raksasa Gargantua.",
                                 "Pastikan kau telah meningkatkan senjatamu dan membawa banyak ramuan pemulih sebelum melangkah keluar!"
                             ]
+
                             def on_gate_talk():
                                 quest_mgr.advance_progress("q4_gate", 1, player, combat_mgr)
                                 dialogue_sys.close()
                                 ui_mgr.show_notification("Quest Selesai: Lapor ke Penjaga Gerbang!")
+                                switch_map("dungeon1.tmx", 200, 200)
 
                             choices = [
                                 ("Siap untuk Ekspedisi", on_gate_talk),
@@ -281,6 +301,23 @@ def main():
         for target in training_targets:
             target.update(dt)
 
+        # Spawn dungeon monsters after map switch if applicable
+        if map_loader.tmx_path == "dungeon1.tmx" and "dungeon1.tmx" not in spawned_maps:
+            # Example monster placements in Dungeon 1
+            training_targets.extend([
+                TrainingTarget("Skeleton Guard", 300, 300, max_hp=150, is_monster=True),
+                TrainingTarget("Swamp Slime", 350, 340, max_hp=120, is_monster=True),
+                TrainingTarget("Skeleton Guard", 400, 380, max_hp=150, is_monster=True),
+            ])
+            spawned_maps.add("dungeon1.tmx")
+        elif map_loader.tmx_path == "dungeon2.tmx" and "dungeon2.tmx" not in spawned_maps:
+            # Example monster placements in Dungeon 2
+            training_targets.extend([
+                TrainingTarget("Dark Gargantua", 500, 500, max_hp=300, is_monster=True),
+                TrainingTarget("Cursed Skeleton", 550, 460, max_hp=180, is_monster=True),
+            ])
+            spawned_maps.add("dungeon2.tmx")
+
         # Update Smooth Camera Mengikuti Pemain
         target_cam_x = player.x + 24 - SCREEN_WIDTH / 2
         target_cam_y = player.y + 24 - SCREEN_HEIGHT / 2
@@ -302,6 +339,8 @@ def main():
         # -------------------------------------------------------------
         # RENDER PIPELINE
         # -------------------------------------------------------------
+        # Clear screen to avoid remnants from previous map
+        screen.fill((0, 0, 0))
         # 1. Gambar Base Map (Ground, Jalan, Tebing, Jembatan, Kastil)
         map_loader.draw(screen, render_cam_x, render_cam_y)
 
