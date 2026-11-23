@@ -1,0 +1,4 @@
+# Dependensi utama Ashes of Oakhaven: The Hollow Crown
+# Gunakan pygame-ce (kompatibel Python 3.13/3.14+) atau pygame>=2.5.0
+pygame-ce>=2.5.0
+pillow>=10.0.0

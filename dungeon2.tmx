@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <map version="1.10" tiledversion="1.12.2" orientation="orthogonal" renderorder="right-down" width="40" height="40" tilewidth="32" tileheight="32" infinite="0" nextlayerid="16" nextobjectid="1">
- <tileset firstgid="1" source="Gemini_Generated_Image_n7vxldn7vxldn7vx.tsx"/>
  <tileset firstgid="1057" source="tileset.tsx"/>
  <tileset firstgid="1882" source="candlestick1.tsx"/>
  <tileset firstgid="1883" source="B32x32.tsx"/>

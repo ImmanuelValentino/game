@@ -5,6 +5,7 @@ Dilengkapi graceful degradation (tidak pernah crash jika audio device bermasalah
 import os
 import pygame
 
+
 class AudioManager:
     def __init__(self):
         self.enabled = True
@@ -13,7 +14,7 @@ class AudioManager:
         self.current_bgm = None
         self.sfx_volume = 0.7
         self.music_volume = 0.4
-        
+
         try:
             if not pygame.mixer.get_init():
                 pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
@@ -47,6 +48,11 @@ class AudioManager:
             "cancel": "menu_cancel.wav",
             "dialogue_beep": "dialogue_beep.wav",
             "gameover": "gameover.wav",
+            "projectile": "projectile.wav",
+            "explosion": "explosion.wav",
+            "parry": "parry.wav",
+            "ending_good": "ending_good.wav",
+            "ending_bad": "ending_bad.wav",
         }
 
         for key, filename in sound_files.items():
@@ -70,18 +76,24 @@ class AudioManager:
                 pass
 
     def play_music(self, name="bgm_lobby", loop=-1):
-        if not self.enabled or self.muted:
+        if not self.enabled:
             return
-        
-        path = f"assets/audio/{name}.ogg"
-        if not os.path.exists(path):
-            path = f"assets/audio/bgm_peaceful.ogg"
-        
-        if os.path.exists(path):
+        if self.current_bgm == name:
+            return
+
+        candidates = [
+            f"assets/audio/{name}.ogg",
+            f"assets/audio/{name}.wav",
+            "assets/audio/bgm_peaceful.ogg",
+        ]
+        path = next((p for p in candidates if os.path.exists(p)), None)
+        if path:
             try:
                 pygame.mixer.music.load(path)
                 pygame.mixer.music.set_volume(self.music_volume)
                 pygame.mixer.music.play(loop)
+                if self.muted:
+                    pygame.mixer.music.pause()
                 self.current_bgm = name
             except Exception as e:
                 print(f"[Audio] Error playing music {path}: {e}")
@@ -90,6 +102,7 @@ class AudioManager:
         if self.enabled:
             try:
                 pygame.mixer.music.stop()
+                self.current_bgm = None
             except Exception:
                 pass
 
@@ -104,6 +117,7 @@ class AudioManager:
             except Exception:
                 pass
         return self.muted
+
 
 # Singleton instance
 audio_manager = AudioManager()
