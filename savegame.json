@@ -1,19 +1,19 @@
 {
-  "level": 5,
-  "exp": 310,
-  "exp_to_next": 383,
-  "max_hp": 160,
-  "hp": 160,
-  "max_stamina": 140,
-  "stamina": 140.0,
-  "gold": 679,
-  "monster_ash": 29,
-  "base_damage": 38,
+  "level": 6,
+  "exp": 227,
+  "exp_to_next": 536,
+  "max_hp": 175,
+  "hp": 175,
+  "max_stamina": 150,
+  "stamina": 150.0,
+  "gold": 822,
+  "monster_ash": 41,
+  "base_damage": 42,
   "bonus_damage": 0,
   "armor": 0,
   "speed_bonus": 0.0,
-  "x": 796.7706950000012,
-  "y": 85.79183499999912,
+  "x": 596.5936100000018,
+  "y": 238.70613499999982,
   "inventory": [
     {
       "id": "ancestral_blade",
@@ -54,8 +54,8 @@
       },
       {
         "id": "q2_training",
-        "current_count": 0,
-        "is_completed": false
+        "current_count": 3,
+        "is_completed": true
       },
       {
         "id": "q3_supplies",
