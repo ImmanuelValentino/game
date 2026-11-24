@@ -70,13 +70,14 @@ def _load_ninja_npc_assets(folder_name, fallback_size=(32, 32)):
 
 
 class BaseNPC:
-    def __init__(self, name, x, y, width=32, height=32, interact_radius=50):
+    def __init__(self, name, x, y, width=32, height=32, interact_radius=50, map_role="npc"):
         self.name = name
         self.x = float(x)
         self.y = float(y)
         self.width = width
         self.height = height
         self.interact_radius = interact_radius
+        self.map_role = map_role
         self.frames = []
         self.frame_index = 0.0
         self.anim_speed = 4.0
@@ -116,7 +117,7 @@ class BaseNPC:
 
 class Campfire(BaseNPC):
     def __init__(self, x=544, y=256):
-        super().__init__("Api Unggun Oakhaven", x, y, width=32, height=32, interact_radius=58)
+        super().__init__("Api Unggun Oakhaven", x, y, width=32, height=32, interact_radius=58, map_role="campfire")
         self.particles = []
         self._create_fire_frames()
 
@@ -160,10 +161,92 @@ class Campfire(BaseNPC):
             surface.blit(psurf, (int(p["x"] - camera_x), int(p["y"] - camera_y)))
 
 
+class WhiteFlame(BaseNPC):
+    """Api Putih di sudut map dungeon: satu-satunya sumber regenerasi HP pasif via radius."""
+    def __init__(self, x, y, heal_radius=74.0, heal_rate=12.0, max_energy=140.0):
+        super().__init__("Api Putih", x, y, width=36, height=36, interact_radius=heal_radius, map_role="white_fire")
+        self.heal_radius = float(heal_radius)
+        self.heal_rate = float(heal_rate)
+        self.max_energy = float(max_energy)
+        self.energy = float(max_energy)
+        self.recharge_delay = 16.0
+        self.recharge_timer = 0.0
+        self._heal_accum = 0.0
+        self._sfx_timer = 0.0
+        self._pulse = 0.0
+        self._load_white_fire_frames()
+
+    def _load_white_fire_frames(self):
+        gif_path = "assets/effects/white_fire.gif"
+        if os.path.exists(gif_path):
+            raw = load_frames_from_gif_or_png(gif_path)
+            self.frames = [pygame.transform.scale(f, (36, 36)) for f in raw]
+            self.anim_speed = 7.0
+        else:
+            surf = pygame.Surface((36, 36), pygame.SRCALPHA)
+            pygame.draw.circle(surf, (220, 250, 255), (18, 18), 14)
+            self.frames = [surf]
+
+    def update(self, dt, player=None, combat_mgr=None):
+        super().update(dt)
+        self._pulse = (self._pulse + dt * 2.8) % (math.pi * 2)
+        if self._sfx_timer > 0:
+            self._sfx_timer = max(0.0, self._sfx_timer - dt)
+
+        if self.recharge_timer > 0:
+            self.recharge_timer = max(0.0, self.recharge_timer - dt)
+            if self.recharge_timer == 0.0:
+                self.energy = self.max_energy
+        elif player is not None and not player.is_dead:
+            cx, cy = self.get_center()
+            px, py = player.x + 24, player.y + 24
+            dist = math.hypot(cx - px, cy - py)
+            if dist <= self.heal_radius and self.energy > 0:
+                player.in_white_fire = True
+                if player.hp < player.max_hp:
+                    gain = min(self.energy, self.heal_rate * dt)
+                    self.energy -= gain
+                    self._heal_accum += gain
+                    pts = int(self._heal_accum)
+                    if pts >= 1:
+                        self._heal_accum -= pts
+                        healed = min(player.max_hp - player.hp, pts)
+                        if healed > 0:
+                            player.hp = min(player.max_hp, player.hp + healed)
+                            player.hp_trail = float(player.hp)
+                            if self._sfx_timer <= 0:
+                                self._sfx_timer = 0.75
+                                audio_manager.play_sound("heal")
+                                if combat_mgr:
+                                    combat_mgr.floating_texts.append(
+                                        FloatingText(px, player.y - 14, f"+{healed} HP (Api Putih)", (200, 248, 255), font_size=15)
+                                    )
+                    if self.energy <= 0.5:
+                        self.energy = 0.0
+                        self.recharge_timer = self.recharge_delay
+            elif self.energy < self.max_energy:
+                self.energy = min(self.max_energy, self.energy + 6.0 * dt)
+
+    def draw(self, surface, camera_x, camera_y):
+        cx = int(self.x + self.width / 2 - camera_x)
+        cy = int(self.y + self.height / 2 - camera_y)
+        r = int(self.heal_radius + math.sin(self._pulse) * 3)
+        aura = pygame.Surface((r * 2 + 6, r * 2 + 6), pygame.SRCALPHA)
+        active = self.recharge_timer <= 0 and self.energy > 0
+        fill_col = (195, 245, 255, 26) if active else (110, 125, 140, 18)
+        ring_col = (225, 252, 255, 130) if active else (120, 130, 145, 80)
+        pygame.draw.circle(aura, fill_col, (r + 3, r + 3), r)
+        pygame.draw.circle(aura, ring_col, (r + 3, r + 3), r, 2)
+        surface.blit(aura, (cx - r - 3, cy - r - 3))
+
+        self.name = "Api Putih (Pulih HP)" if active else f"Api Putih ({int(self.recharge_timer)}s)"
+        super().draw(surface, camera_x, camera_y)
+
+
 class MapPortal(BaseNPC):
     """Portal / pintu transisi dua arah antar Hub, 5 Stage GDD, dan Dungeon Klasik."""
     def __init__(self, name, x, y, target_map, target_x, target_y, color=(100, 180, 255)):
-        super().__init__(name, x, y, width=32, height=32, interact_radius=56)
+        super().__init__(name, x, y, width=32, height=32, interact_radius=56, map_role="portal")
         self.target_map = target_map
         self.target_x = float(target_x)
         self.target_y = float(target_y)
@@ -196,20 +279,20 @@ class MapPortal(BaseNPC):
 
 class ElaraNPC(BaseNPC):
     def __init__(self, x=440, y=250):
-        super().__init__("Elara (Arsiparis & Quest)", x, y, width=32, height=32, interact_radius=54)
+        super().__init__("Elara (Arsiparis & Quest)", x, y, width=32, height=32, interact_radius=54, map_role="quest")
         self.frames, self.portrait = _load_ninja_npc_assets("Woman", (32, 32))
 
 
 class BrogNPC(BaseNPC):
     def __init__(self, x=650, y=250):
-        super().__init__("Brog (Barman Rusty Anchor)", x, y, width=32, height=32, interact_radius=58)
+        super().__init__("Brog (Barman Rusty Anchor)", x, y, width=32, height=32, interact_radius=58, map_role="bar")
         self.frames, self.portrait = _load_ninja_npc_assets("Villager", (32, 32))
 
 
 class VektorNPC(BaseNPC):
     """Vektor (Guildmaster & Bengkel Skill) menggunakan sprite character/npc_guild."""
     def __init__(self, x=352, y=240):
-        super().__init__("Vektor (Guildmaster & Skill)", x, y, width=52, height=52, interact_radius=60)
+        super().__init__("Vektor (Guildmaster & Skill)", x, y, width=52, height=52, interact_radius=60, map_role="skill")
         gif_path = "character/npc_guild/Idle_breathing-idle_south.gif"
         if os.path.exists(gif_path):
             raw_frames = load_frames_from_gif_or_png(gif_path)
@@ -223,7 +306,7 @@ class VektorNPC(BaseNPC):
 class AellNPC(BaseNPC):
     """Aell (Map Reader / Kartografi Dinamis) menggunakan sprite character/npc_mapReader."""
     def __init__(self, x=352, y=320):
-        super().__init__("Aell (Map Reader)", x, y, width=48, height=48, interact_radius=56)
+        super().__init__("Aell (Map Reader)", x, y, width=48, height=48, interact_radius=56, map_role="map")
         gif_path = "character/npc_mapReader/Idle_custom-walking_south.gif"
         if os.path.exists(gif_path):
             raw = load_frames_from_gif_or_png(gif_path, max_frames=2)
@@ -234,7 +317,7 @@ class AellNPC(BaseNPC):
 class GaelNPC(BaseNPC):
     """Gael (Former Adventurer & Pedagang Senjata) menggunakan sprite character/npc_formerAdvanture."""
     def __init__(self, x=584, y=364):
-        super().__init__("Gael (Pedagang Senjata)", x, y, width=48, height=48, interact_radius=58)
+        super().__init__("Gael (Pedagang Senjata & Shop)", x, y, width=48, height=48, interact_radius=58, map_role="shop")
         gif_path = "character/npc_formerAdvanture/Idle_breathing-idle_south.gif"
         if os.path.exists(gif_path):
             raw = load_frames_from_gif_or_png(gif_path)
@@ -252,14 +335,14 @@ MapReaderNPC = AellNPC
 
 class GatekeeperNPC(BaseNPC):
     def __init__(self, x=864, y=120):
-        super().__init__("Kapten Penjaga Gerbang", x, y, width=32, height=32, interact_radius=56)
+        super().__init__("Kapten Penjaga Gerbang", x, y, width=32, height=32, interact_radius=56, map_role="guard")
         self.frames, self.portrait = _load_ninja_npc_assets("Knight", (32, 32))
 
 
 class VillagerChildNPC(BaseNPC):
     """Penyintas muda Oakhaven menggunakan sprite character/npc_boy atau npc_girl."""
     def __init__(self, name, x, y, variant="boy"):
-        super().__init__(name, x, y, width=44, height=44, interact_radius=52)
+        super().__init__(name, x, y, width=44, height=44, interact_radius=52, map_role="villager")
         path = "character/npc_boy/Idle_breathing-idle_south.gif" if variant == "boy" else "character/npc_girl/south.png"
         if os.path.exists(path):
             raw = load_frames_from_gif_or_png(path)
@@ -387,6 +470,7 @@ class Enemy(TrainingTarget):
         self.ash_range = ash_range
         self.gold_range = gold_range
         self.is_boss = is_boss
+        self.map_role = "boss" if is_boss else "enemy"
         self.is_ranged = is_ranged
         self.proj_color = proj_color
 
@@ -597,14 +681,14 @@ class Enemy(TrainingTarget):
 
 
 class BossEntity(Enemy):
-    """5 Jenderal Bioma GDD & Final Boss 2 Fase (Sang Penguasa Abu -> The Hollow Crown)."""
+    """4 Jenderal Dungeon 1-4 & Final Boss 2 Fase Domain Ruang Takhta."""
     BOSS_SPECS = {
-        "gargantua": ("Jenderal Gargantua (Rawa Kematian)", "boss_gargantua", 85, 5, 85, 76.0, (110, 170, 75), 170),
-        "vespa": ("Ratu Spora Vespa (Hutan Spora)", "boss_vespa", 125, 9, 115, 86.0, (185, 95, 245), 280),
-        "ignis": ("Ignis Executioner (Tungku Gehenna)", "boss_ignis", 170, 14, 150, 96.0, (255, 125, 40), 420),
-        "valerius": ("Jenderal Valerius (Salju Hitam)", "boss_valerius", 220, 20, 190, 108.0, (150, 230, 255), 600),
-        "ash_lord": ("Sang Penguasa Abu (Fase 1)", "boss_demonKing", 230, 24, 220, 102.0, (255, 70, 55), 900),
-        "demon_king": ("Raja Iblis: Penguasa Abu", "boss_demonKing", 150, 11, 140, 84.0, (255, 70, 55), 340),
+        "gargantua": ("Jenderal Gargantua (Dungeon 1)", "boss_gargantua", 95, 6, 95, 78.0, (110, 170, 75), 180),
+        "vespa": ("Ratu Spora Vespa (Dungeon 2)", "boss_vespa", 230, 14, 155, 90.0, (185, 95, 245), 320),
+        "ignis": ("Ignis Executioner (Dungeon 3)", "boss_ignis", 420, 24, 240, 102.0, (255, 125, 40), 500),
+        "valerius": ("Jenderal Valerius (Dungeon 4)", "boss_valerius", 680, 36, 330, 114.0, (150, 230, 255), 740),
+        "ash_lord": ("Sang Penguasa Abu (Fase 1)", "boss_demonKing", 560, 32, 300, 106.0, (255, 70, 55), 1100),
+        "demon_king": ("Raja Iblis: Penguasa Abu", "boss_demonKing", 240, 15, 175, 88.0, (255, 70, 55), 400),
     }
 
     def __init__(self, boss_id, x, y):
@@ -613,13 +697,15 @@ class BossEntity(Enemy):
         )
         super().__init__(
             name=name, x=x, y=y, max_hp=hp, defense=defense, attack_damage=atk,
-            speed=spd, aggro_range=380.0, attack_range=58.0, sprite_kind=sprite_kind,
+            speed=spd, aggro_range=400.0, attack_range=58.0, sprite_kind=sprite_kind,
             exp_reward=exp_rew, ash_range=(20, 35), gold_range=(45, 80), is_boss=True,
             proj_color=pcol,
         )
         self.boss_id = boss_id
         self.phase = 1
         self.special_timer = 2.8
+        self.skull_barrage_timer = 4.2
+        self.skull_formation_idx = 0
         self.spiral_angle = 0.0
 
     def take_damage(self, amount):
@@ -634,10 +720,11 @@ class BossEntity(Enemy):
         if self.hp <= 0 and self.boss_id == "ash_lord" and self.phase == 1:
             self.phase = 2
             self.name = "Mahkota Kutukan: The Hollow Crown (Fase 2)"
-            self.max_hp = 270
-            self.hp = 270
-            self.attack_damage = 260
-            self.speed = 115.0
+            self.max_hp = 720
+            self.hp = 720
+            self.attack_damage = 350
+            self.speed = 118.0
+            self.skull_barrage_timer = 2.0
             self._load_enemy_sprites("boss_hollow_crown")
             audio_manager.play_sound("explosion")
         return actual
@@ -653,11 +740,30 @@ class BossEntity(Enemy):
         if dist > self.aggro_range:
             return
 
+        base_ang = math.atan2(pc_y - ec_y, pc_x - ec_x)
+        if self.boss_id == "ash_lord":
+            # Serangan Khusus Final Boss Domain: 6 Kepala Tengkorak Laser (tak bisa dihancurkan)
+            self.skull_barrage_timer -= dt
+            if self.skull_barrage_timer <= 0 and hasattr(combat_mgr, "trigger_skull_lasers"):
+                if self.phase == 2 or self.hp <= self.max_hp * 0.82:
+                    formation = "top_bottom" if (self.skull_formation_idx % 2 == 0) else "left_right"
+                    self.skull_formation_idx += 1
+                    map_w = map_loader.map_width_px if map_loader else 1280
+                    map_h = map_loader.map_height_px if map_loader else 1280
+                    combat_mgr.trigger_skull_lasers(
+                        formation=formation,
+                        damage=int(self.attack_damage * (0.9 if self.phase == 1 else 1.05)),
+                        map_w=map_w,
+                        map_h=map_h,
+                        focus_x=pc_x,
+                        focus_y=pc_y,
+                    )
+                    self.skull_barrage_timer = 9.5 if self.phase == 1 else 6.8
+
         self.special_timer -= dt
         if self.special_timer > 0:
             return
 
-        base_ang = math.atan2(pc_y - ec_y, pc_x - ec_x)
         if self.boss_id == "gargantua":
             self.special_timer = 4.2
             # Hentakan tanah + lumpur radial 4 arah

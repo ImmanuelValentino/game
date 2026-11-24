@@ -5,7 +5,7 @@ Boss HP bar, minimap, prompt interaksi, help overlay, dan game over modal.
 """
 import pygame
 from src.config import (
-    SCREEN_WIDTH, SCREEN_HEIGHT, STAGE_CONFIGS, get_font,
+    get_screen_size, STAGE_CONFIGS, get_font,
     COLOR_HP, COLOR_HP_BG, COLOR_HP_TRAIL,
     COLOR_STAMINA, COLOR_STAMINA_BG,
     COLOR_EXP, COLOR_EXP_BG,
@@ -18,7 +18,8 @@ from src.config import (
 class UIManager:
     def __init__(self):
         self.show_help = False
-        self.show_minimap = False
+        self.show_minimap = True
+        self.show_tutorial = True
         self.notification_text = ""
         self.notification_timer = 0.0
 
@@ -31,10 +32,34 @@ class UIManager:
             self.notification_timer = max(0.0, self.notification_timer - dt)
 
     def get_respawn_button_rect(self):
+        view_w, view_h = get_screen_size()
         gw, gh = 520, 260
-        gx = (SCREEN_WIDTH - gw) // 2
-        gy = (SCREEN_HEIGHT - gh) // 2
+        gx = (view_w - gw) // 2
+        gy = (view_h - gh) // 2
         return pygame.Rect(gx + gw // 2 - 140, gy + 165, 280, 48)
+
+    def get_tutorial_close_rect(self):
+        _, view_h = get_screen_size()
+        return pygame.Rect(20 + 258, view_h - 196, 22, 22)
+
+    def _get_hotbar_geometry(self, view_size=None):
+        view_w, view_h = view_size if view_size is not None else get_screen_size()
+        slot_w, slot_h, spacing = 48, 48, 8
+        item_slots = 4
+        action_slots = 3
+        divider_w = 12
+        bar_w = (item_slots + action_slots) * slot_w + (item_slots + action_slots - 2) * spacing + divider_w + 22
+        bar_h = 66
+        bar_x = (view_w - bar_w) // 2
+        bar_y = view_h - bar_h - 14
+        return bar_x, bar_y, bar_w, bar_h, slot_w, slot_h, spacing, divider_w
+
+    def get_hotbar_item_rects(self, view_size=None):
+        bar_x, bar_y, _, _, slot_w, slot_h, spacing, _ = self._get_hotbar_geometry(view_size)
+        return [
+            (i, pygame.Rect(bar_x + 11 + i * (slot_w + spacing), bar_y + 9, slot_w, slot_h))
+            for i in range(4)
+        ]
 
     def draw_hud(
         self, surface, player, combat_mgr, inventory, quest_mgr,
@@ -47,6 +72,8 @@ class UIManager:
         self._draw_quest_tracker(surface, quest_mgr)
         self._draw_boss_bar(surface, targets or [])
         self._draw_hotbar(surface, player, combat_mgr, inventory)
+        if self.show_tutorial:
+            self._draw_tutorial_card(surface)
         self._draw_interaction_prompt(surface, nearby_npc)
         self._draw_notification(surface)
 
@@ -114,8 +141,16 @@ class UIManager:
         surface.blit(font_num.render(w_str, True, COLOR_GOLD), (start_x + 14, start_y + 94))
 
     def _draw_status_badges(self, surface, player):
-        """Menampilkan badge efek aktif (Perfect Dodge Slow-Mo, Fatigue, Hazard Bioma)."""
+        """Menampilkan badge efek aktif (Buff Potion, Api Putih, Slow-Mo, Fatigue, Hazard)."""
         badges = []
+        if getattr(player, "atk_boost_timer", 0.0) > 0:
+            badges.append((f"ATK BOOST +50% ({player.atk_boost_timer:.0f}s)", (230, 100, 40)))
+        if getattr(player, "def_boost_timer", 0.0) > 0:
+            badges.append((f"DEF BOOST +18 ({player.def_boost_timer:.0f}s)", (65, 145, 230)))
+        if getattr(player, "crit_boost_timer", 0.0) > 0:
+            badges.append((f"CRIT FOCUS +35% ({player.crit_boost_timer:.0f}s)", (185, 85, 225)))
+        if getattr(player, "in_white_fire", False):
+            badges.append(("API PUTIH: MEMULIHKAN HP", (70, 170, 195)))
         if player.perfect_dodge_slowmo_timer > 0:
             badges.append(("SLOW-MO + 150% CRIT!", (70, 175, 240)))
         if player.is_fatigued:
@@ -143,8 +178,9 @@ class UIManager:
             y += 26
 
     def _draw_currency(self, surface, player, current_map):
+        view_w, _ = get_screen_size(surface)
         box_w, box_h = 300, 44
-        box_x = SCREEN_WIDTH - box_w - 20
+        box_x = view_w - box_w - 20
         box_y = 20
 
         surf = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
@@ -163,24 +199,28 @@ class UIManager:
         surface.blit(c_font.render(f"{player.skill_points} SKL", True, COLOR_TEXT_ACCENT), (box_x + 220, box_y + 13))
 
         h_font = get_font(11)
-        h_surf = h_font.render("[H]: Bantuan | [TAB]: Peta | [M]: Mute", True, COLOR_TEXT_MUTED)
-        surface.blit(h_surf, (box_x + box_w - h_surf.get_width() - 2, box_y + box_h + 6))
-
+        h_surf = h_font.render("[F1]: Tutorial | [H]: Bantuan | [TAB]: Peta | [F11]: Layar", True, COLOR_WHITE)
         loc_name = STAGE_CONFIGS.get(current_map, {}).get("name", current_map)
         loc_surf = h_font.render(loc_name, True, COLOR_TEXT_ACCENT)
-        surface.blit(loc_surf, (box_x + box_w - loc_surf.get_width() - 2, box_y + box_h + 22))
+        info_w = max(h_surf.get_width(), loc_surf.get_width()) + 14
+        info_box = pygame.Surface((info_w, 36), pygame.SRCALPHA)
+        pygame.draw.rect(info_box, (14, 16, 24, 195), (0, 0, info_w, 36), border_radius=6)
+        surface.blit(info_box, (box_x + box_w - info_w, box_y + box_h + 4))
+        surface.blit(h_surf, (box_x + box_w - h_surf.get_width() - 6, box_y + box_h + 6))
+        surface.blit(loc_surf, (box_x + box_w - loc_surf.get_width() - 6, box_y + box_h + 22))
 
     def _draw_quest_tracker(self, surface, quest_mgr):
+        view_w, _ = get_screen_size(surface)
         current_q = quest_mgr.get_current_quest()
         q_text = f"{current_q.title} ({current_q.current_count}/{current_q.target_count})" if current_q else "Semua Quest Utama Selesai!"
 
         font = get_font(13, bold=True)
         rendered = font.render(q_text, True, COLOR_GOLD)
 
-        box_w = rendered.get_width() + 50
+        box_w = min(view_w - 40, rendered.get_width() + 50)
         box_h = 32
-        box_x = (SCREEN_WIDTH - box_w) // 2
-        box_y = 20
+        box_x = (view_w - box_w) // 2
+        box_y = 20 if view_w >= 1060 else 142
 
         surf = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
         pygame.draw.rect(surf, (18, 20, 28, 205), (0, 0, box_w, box_h), border_radius=6)
@@ -196,13 +236,14 @@ class UIManager:
         if not boss:
             return
 
-        bar_w, bar_h = 500, 16
-        bx = (SCREEN_WIDTH - bar_w) // 2
-        by = 62
+        view_w, _ = get_screen_size(surface)
+        bar_w, bar_h = min(500, view_w - 80), 16
+        bx = (view_w - bar_w) // 2
+        by = 62 if view_w >= 1060 else 182
 
         name_font = get_font(13, bold=True)
         n_surf = name_font.render(boss.name, True, (255, 115, 95))
-        surface.blit(n_surf, (SCREEN_WIDTH // 2 - n_surf.get_width() // 2, by))
+        surface.blit(n_surf, (view_w // 2 - n_surf.get_width() // 2, by))
 
         ry = by + 20
         pygame.draw.rect(surface, (20, 12, 16), (bx - 2, ry - 2, bar_w + 4, bar_h + 4), border_radius=5)
@@ -212,36 +253,63 @@ class UIManager:
         pygame.draw.rect(surface, COLOR_GOLD, (bx - 2, ry - 2, bar_w + 4, bar_h + 4), 1, border_radius=5)
 
     def _draw_hotbar(self, surface, player, combat_mgr, inventory):
-        slot_w, slot_h, spacing, total_slots = 48, 48, 10, 5
-        bar_w = total_slots * slot_w + (total_slots - 1) * spacing + 20
-        bar_h = 66
-        bar_x = (SCREEN_WIDTH - bar_w) // 2
-        bar_y = SCREEN_HEIGHT - bar_h - 15
+        view_w, view_h = get_screen_size(surface)
+        bar_x, bar_y, bar_w, bar_h, slot_w, slot_h, spacing, divider_w = self._get_hotbar_geometry((view_w, view_h))
 
         surf = pygame.Surface((bar_w, bar_h), pygame.SRCALPHA)
-        pygame.draw.rect(surf, (18, 20, 28, 220), (0, 0, bar_w, bar_h), border_radius=10)
+        pygame.draw.rect(surf, (18, 20, 28, 224), (0, 0, bar_w, bar_h), border_radius=10)
         pygame.draw.rect(surf, COLOR_PANEL_BORDER, (0, 0, bar_w, bar_h), 1, border_radius=10)
         surface.blit(surf, (bar_x, bar_y))
 
-        k_font = get_font(11, bold=True)
+        k_font = get_font(10, bold=True)
         cnt_font = get_font(11, bold=True)
 
-        slots_data = [
-            {"key": "1", "count": inventory.get_count("hp_potion"), "cd": 0.0, "icon_color": (220, 50, 60)},
-            {"key": "2", "count": inventory.get_count("stamina_tonic"), "cd": 0.0, "icon_color": (40, 170, 70)},
-            {"key": "LMB", "count": None, "cd": combat_mgr.attack_cd_timer / combat_mgr.attack_cooldown, "icon_color": (240, 190, 50)},
-            {"key": "RMB", "count": None, "cd": combat_mgr.skill_cd_timer / combat_mgr.skill_cooldown, "icon_color": (230, 80, 40)},
-            {"key": "Space", "count": None, "cd": player.roll_cd_timer / player.roll_cooldown, "icon_color": (100, 170, 255)},
-        ]
+        # 1. Empat Kotak Slot Item Dinamis ([1]..[4]) dari Drop & Shop
+        hotbar_entries = inventory.get_hotbar_entries() if hasattr(inventory, "get_hotbar_entries") else []
+        for idx, key_lbl, item_obj, count in hotbar_entries:
+            sx = bar_x + 11 + idx * (slot_w + spacing)
+            sy = bar_y + 9
+            s_rect = pygame.Rect(sx, sy, slot_w, slot_h)
 
-        for i, s in enumerate(slots_data):
-            sx = bar_x + 10 + i * (slot_w + spacing)
+            has_item = item_obj is not None and count > 0
+            bg_col = (32, 36, 52) if has_item else (22, 24, 34)
+            border_col = item_obj.get_rarity_color() if has_item else (55, 60, 78)
+            pygame.draw.rect(surface, bg_col, s_rect, border_radius=6)
+            pygame.draw.rect(surface, border_col, s_rect, 1, border_radius=6)
+
+            if item_obj and item_obj.icon_surf:
+                icon = pygame.transform.scale(item_obj.icon_surf, (30, 30))
+                if count <= 0:
+                    icon = icon.copy()
+                    icon.set_alpha(85)
+                surface.blit(icon, (s_rect.centerx - 15, s_rect.centery - 14))
+
+            if item_obj and count > 0:
+                c_text = cnt_font.render(str(count), True, COLOR_WHITE)
+                surface.blit(c_text, (s_rect.right - c_text.get_width() - 4, s_rect.bottom - 15))
+
+            k_text = k_font.render(key_lbl, True, COLOR_GOLD)
+            surface.blit(k_text, (s_rect.x + 4, s_rect.y + 3))
+
+        # Pembatas antara slot item dan indikator skill tempur
+        div_x = bar_x + 11 + 4 * (slot_w + spacing) - spacing // 2 + divider_w // 2
+        pygame.draw.line(surface, (85, 80, 75), (div_x, bar_y + 12), (div_x, bar_y + bar_h - 12), 2)
+
+        # 2. Indikator Serangan, Skill (30 STA), dan Dodge Roll
+        action_start_x = div_x + divider_w // 2 + 4
+        actions_data = [
+            {"key": "LMB", "cd": combat_mgr.attack_cd_timer / combat_mgr.attack_cooldown, "icon_color": (240, 190, 50)},
+            {"key": "RMB", "cd": combat_mgr.skill_cd_timer / combat_mgr.skill_cooldown, "icon_color": (230, 80, 40)},
+            {"key": "Space", "cd": player.roll_cd_timer / player.roll_cooldown, "icon_color": (100, 170, 255)},
+        ]
+        for j, s in enumerate(actions_data):
+            sx = action_start_x + j * (slot_w + spacing)
             sy = bar_y + 9
             s_rect = pygame.Rect(sx, sy, slot_w, slot_h)
 
             pygame.draw.rect(surface, (30, 32, 45), s_rect, border_radius=6)
             pygame.draw.rect(surface, (60, 65, 85), s_rect, 1, border_radius=6)
-            pygame.draw.circle(surface, s["icon_color"], s_rect.center, 12)
+            pygame.draw.circle(surface, s["icon_color"], s_rect.center, 11)
 
             if s["cd"] > 0:
                 cd_surf = pygame.Surface((slot_w, slot_h), pygame.SRCALPHA)
@@ -249,16 +317,47 @@ class UIManager:
                 pygame.draw.rect(cd_surf, (0, 0, 0, 170), (0, slot_h - cd_h, slot_w, cd_h), border_radius=6)
                 surface.blit(cd_surf, (sx, sy))
 
-            if s["count"] is not None:
-                c_text = cnt_font.render(str(s["count"]), True, COLOR_WHITE)
-                surface.blit(c_text, (sx + slot_w - c_text.get_width() - 4, sy + slot_w - 15))
-
             k_text = k_font.render(s["key"], True, COLOR_GOLD)
             surface.blit(k_text, (sx + 4, sy + 3))
 
+    def _draw_minimap_icon(self, surf, role, x, y):
+        """Menggambar ikon penunjuk khusus yang intuitif pada minimap untuk tiap NPC/objek."""
+        if role == "shop":  # Ikon Toko/Koin Emas
+            pygame.draw.rect(surf, (245, 195, 45), (x - 4, y - 4, 8, 8), border_radius=2)
+            pygame.draw.rect(surf, (40, 25, 10), (x - 4, y - 4, 8, 8), 1, border_radius=2)
+            pygame.draw.line(surf, (255, 245, 180), (x, y - 2), (x, y + 2), 1)
+        elif role == "skill":  # Ikon Bengkel Skill/Tempa (Berlian Biru-Cyan)
+            pygame.draw.polygon(surf, (80, 200, 255), [(x, y - 5), (x + 5, y), (x, y + 5), (x - 5, y)])
+            pygame.draw.polygon(surf, (220, 248, 255), [(x, y - 5), (x + 5, y), (x, y + 5), (x - 5, y)], 1)
+        elif role == "map":  # Ikon Peta / Kompas Aell
+            pygame.draw.circle(surf, (95, 225, 165), (x, y), 4)
+            pygame.draw.line(surf, (20, 50, 35), (x - 3, y), (x + 3, y), 1)
+            pygame.draw.line(surf, (20, 50, 35), (x, y - 3), (x, y + 3), 1)
+        elif role == "quest":  # Ikon Quest/Info Elara (!)
+            pygame.draw.circle(surf, (255, 220, 65), (x, y), 5)
+            pygame.draw.line(surf, (35, 20, 10), (x, y - 3), (x, y + 1), 2)
+            surf.set_at((x, y + 3), (35, 20, 10))
+        elif role == "bar":  # Ikon Kedai Brog
+            pygame.draw.rect(surf, (225, 140, 50), (x - 3, y - 4, 6, 7), border_radius=1)
+            pygame.draw.line(surf, (255, 235, 200), (x - 2, y - 4), (x + 2, y - 4), 1)
+        elif role == "campfire":
+            pygame.draw.polygon(surf, (255, 125, 35), [(x, y - 5), (x + 4, y + 4), (x - 4, y + 4)])
+        elif role == "white_fire":  # Api Putih Regen HP di pojok dungeon
+            pygame.draw.circle(surf, (195, 248, 255), (x, y), 5)
+            pygame.draw.line(surf, (255, 255, 255), (x - 3, y), (x + 3, y), 1)
+            pygame.draw.line(surf, (255, 255, 255), (x, y - 3), (x, y + 3), 1)
+        elif role == "portal":
+            pygame.draw.circle(surf, (175, 110, 255), (x, y), 5, 2)
+            pygame.draw.circle(surf, (235, 210, 255), (x, y), 2)
+        elif role in ("guard", "villager"):
+            pygame.draw.circle(surf, (185, 195, 215), (x, y), 3)
+        else:
+            pygame.draw.circle(surf, COLOR_GOLD, (x, y), 3)
+
     def _draw_minimap(self, surface, player, map_loader, npcs, targets):
+        view_w, _ = get_screen_size(surface)
         mm_size = 160
-        mm_x = SCREEN_WIDTH - mm_size - 20
+        mm_x = view_w - mm_size - 20
         mm_y = 112
 
         mm_surf = pygame.Surface((mm_size, mm_size), pygame.SRCALPHA)
@@ -273,38 +372,119 @@ class UIManager:
                 (int(obs.x * scale_x), int(obs.y * scale_y), max(2, int(obs.width * scale_x)), max(2, int(obs.height * scale_y)))
             )
 
+        roles_present = set()
         for npc in npcs:
             nx, ny = npc.get_center()
-            col = COLOR_TEXT_ACCENT if hasattr(npc, "target_map") else COLOR_GOLD
-            pygame.draw.circle(mm_surf, col, (int(nx * scale_x), int(ny * scale_y)), 3)
+            role = getattr(npc, "map_role", "portal" if hasattr(npc, "target_map") else "npc")
+            roles_present.add(role)
+            self._draw_minimap_icon(mm_surf, role, int(nx * scale_x), int(ny * scale_y))
 
+        has_boss = False
+        has_enemy = False
         for t in targets:
             if t.is_alive():
                 tx, ty = t.get_center()
-                col = (255, 60, 60) if getattr(t, "is_boss", False) else (220, 100, 100)
-                pygame.draw.circle(mm_surf, col, (int(tx * scale_x), int(ty * scale_y)), 4 if getattr(t, "is_boss", False) else 2)
+                if getattr(t, "is_boss", False):
+                    has_boss = True
+                    bx, by = int(tx * scale_x), int(ty * scale_y)
+                    pygame.draw.rect(mm_surf, (255, 55, 65), (bx - 4, by - 4, 8, 8))
+                    pygame.draw.rect(mm_surf, COLOR_GOLD, (bx - 4, by - 4, 8, 8), 1)
+                else:
+                    has_enemy = True
+                    pygame.draw.circle(mm_surf, (220, 95, 95), (int(tx * scale_x), int(ty * scale_y)), 2)
 
-        px, py = (player.x + 24) * scale_x, (player.y + 24) * scale_y
-        pygame.draw.circle(mm_surf, (100, 255, 130), (int(px), int(py)), 4)
+        px, py = int((player.x + 24) * scale_x), int((player.y + 24) * scale_y)
+        pygame.draw.polygon(mm_surf, (95, 255, 130), [(px, py - 5), (px + 4, py + 4), (px - 4, py + 4)])
+        pygame.draw.polygon(mm_surf, COLOR_WHITE, [(px, py - 5), (px + 4, py + 4), (px - 4, py + 4)], 1)
 
         pygame.draw.rect(mm_surf, COLOR_PANEL_BORDER_LIGHT, (0, 0, mm_size, mm_size), 2)
         surface.blit(mm_surf, (mm_x, mm_y))
 
+        # Legenda Ikon Minimap Ringkas di bawah peta
+        legend_items = []
+        role_labels = [
+            ("shop", "Toko Gael"),
+            ("skill", "Skill Vektor"),
+            ("map", "Peta Aell"),
+            ("quest", "Quest/Info"),
+            ("bar", "Kedai Brog"),
+            ("white_fire", "Api Putih (+HP)"),
+            ("portal", "Portal"),
+        ]
+        for r_key, r_txt in role_labels:
+            if r_key in roles_present:
+                legend_items.append((r_key, r_txt))
+        if has_boss:
+            legend_items.append(("boss", "Bos Domain"))
+        elif has_enemy:
+            legend_items.append(("enemy", "Musuh"))
+
+        if legend_items:
+            l_font = get_font(10)
+            row_h = 15
+            leg_h = len(legend_items) * row_h + 10
+            leg_surf = pygame.Surface((mm_size, leg_h), pygame.SRCALPHA)
+            pygame.draw.rect(leg_surf, (16, 18, 26, 200), (0, 0, mm_size, leg_h), border_radius=6)
+            pygame.draw.rect(leg_surf, COLOR_PANEL_BORDER, (0, 0, mm_size, leg_h), 1, border_radius=6)
+            for idx, (rk, rtxt) in enumerate(legend_items):
+                ly = 11 + idx * row_h
+                if rk == "boss":
+                    pygame.draw.rect(leg_surf, (255, 55, 65), (9, ly - 4, 8, 8))
+                    pygame.draw.rect(leg_surf, COLOR_GOLD, (9, ly - 4, 8, 8), 1)
+                elif rk == "enemy":
+                    pygame.draw.circle(leg_surf, (220, 95, 95), (13, ly), 3)
+                else:
+                    self._draw_minimap_icon(leg_surf, rk, 13, ly)
+                leg_surf.blit(l_font.render(rtxt, True, COLOR_WHITE), (26, ly - 6))
+            surface.blit(leg_surf, (mm_x, mm_y + mm_size + 6))
+
+    def _draw_tutorial_card(self, surface):
+        """Panduan tutorial & kontrol ringkas di sudut kiri bawah (toggle [F1])."""
+        _, view_h = get_screen_size(surface)
+        cw, ch = 285, 166
+        cx, cy = 20, view_h - ch - 20
+
+        card = pygame.Surface((cw, ch), pygame.SRCALPHA)
+        pygame.draw.rect(card, (16, 18, 28, 215), (0, 0, cw, ch), border_radius=9)
+        pygame.draw.rect(card, COLOR_PANEL_BORDER_LIGHT, (0, 0, cw, ch), 1, border_radius=9)
+        surface.blit(card, (cx, cy))
+
+        t_font = get_font(11, bold=True)
+        surface.blit(t_font.render("TUTORIAL & KONTROL [F1]", True, COLOR_GOLD), (cx + 10, cy + 7))
+        surface.blit(t_font.render("X", True, (225, 90, 90)), (cx + cw - 19, cy + 7))
+
+        b_font = get_font(10)
+        tips = [
+            ("WASD + Shift", "Bergerak & Sprint | [E] Interaksi NPC"),
+            ("LMB / RMB", "Tebasan (5 STA) & Ash Cleave (30 STA)"),
+            ("Spasi", "Dodge Roll (15 STA) / Slow-Mo"),
+            ("Tombol 1-4", "Pakai Item/Boost di Kotak Bawah"),
+            ("TAB / F11", "Ikon Peta NPC & Layar Penuh"),
+            ("Api Putih", "Dekati Api Putih di sudut Dungeon (+HP)"),
+        ]
+        for idx, (k, d) in enumerate(tips):
+            ry = cy + 28 + idx * 22
+            surface.blit(b_font.render(k, True, COLOR_TEXT_ACCENT), (cx + 10, ry))
+            surface.blit(b_font.render(d, True, COLOR_WHITE), (cx + 88, ry))
+
     def _draw_interaction_prompt(self, surface, nearby_npc):
         if not nearby_npc:
             return
-        if hasattr(nearby_npc, "target_map"):
+        if getattr(nearby_npc, "map_role", "") == "white_fire":
+            prompt_str = "Api Putih: Berdiri di dalam aura untuk regenerasi HP"
+        elif hasattr(nearby_npc, "target_map"):
             prompt_str = f"[E] {nearby_npc.name}"
         elif nearby_npc.name == "Api Unggun Oakhaven":
             prompt_str = "[E] Istirahat & Simpan Game"
         else:
             prompt_str = f"[E] Bicara dengan {nearby_npc.name}"
 
+        view_w, view_h = get_screen_size(surface)
         font = get_font(14, bold=True)
         text = font.render(prompt_str, True, COLOR_GOLD)
         pw, ph = text.get_width() + 32, 36
-        px = (SCREEN_WIDTH - pw) // 2
-        py = SCREEN_HEIGHT - 135
+        px = (view_w - pw) // 2
+        py = view_h - 135
 
         psurf = pygame.Surface((pw, ph), pygame.SRCALPHA)
         pygame.draw.rect(psurf, (18, 20, 28, 220), (0, 0, pw, ph), border_radius=8)
@@ -315,10 +495,11 @@ class UIManager:
     def _draw_notification(self, surface):
         if self.notification_timer <= 0:
             return
+        view_w, _ = get_screen_size(surface)
         font = get_font(16, bold=True)
         text = font.render(self.notification_text, True, COLOR_GOLD)
         nw, nh = text.get_width() + 40, 40
-        nx = (SCREEN_WIDTH - nw) // 2
+        nx = (view_w - nw) // 2
         ny = 98
 
         nsurf = pygame.Surface((nw, nh), pygame.SRCALPHA)
@@ -328,19 +509,20 @@ class UIManager:
         surface.blit(text, (nx + 20, ny + 9))
 
     def _draw_help_overlay(self, surface):
-        dim = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        view_w, view_h = get_screen_size(surface)
+        dim = pygame.Surface((view_w, view_h), pygame.SRCALPHA)
         dim.fill((0, 0, 0, 180))
         surface.blit(dim, (0, 0))
 
-        hw, hh = 590, 470
-        hx = (SCREEN_WIDTH - hw) // 2
-        hy = (SCREEN_HEIGHT - hh) // 2
+        hw, hh = min(640, view_w - 40), min(500, view_h - 40)
+        hx = (view_w - hw) // 2
+        hy = (view_h - hh) // 2
 
         pygame.draw.rect(surface, COLOR_PANEL_BG, (hx, hy, hw, hh), border_radius=12)
         pygame.draw.rect(surface, COLOR_PANEL_BORDER, (hx, hy, hw, hh), 2, border_radius=12)
         pygame.draw.rect(surface, COLOR_PANEL_BORDER_LIGHT, (hx + 4, hy + 4, hw - 8, hh - 8), 1, border_radius=10)
 
-        surface.blit(get_font(20, bold=True).render("PANDUAN KONTROL & MEKANIKA GDD", True, COLOR_GOLD), (hx + 24, hy + 18))
+        surface.blit(get_font(20, bold=True).render("PANDUAN KONTROL & MEKANIKA", True, COLOR_GOLD), (hx + 24, hy + 18))
 
         controls = [
             ("W / A / S / D", "Bergerak 8 arah (Top-Down)"),
@@ -351,29 +533,31 @@ class UIManager:
             ("Spasi", "Dodge Roll (15 STA) & Perfect Dodge Slow-Mo 1.5s"),
             ("Tombol [E]", "Interaksi NPC, Peta Aell, Vektor, Gael, Portal"),
             ("Tombol [B] / [I]", "Buka / Tutup Tas (Pakai potion / Equip senjata)"),
-            ("Tombol [1] & [2]", "Gunakan Ramuan HP & Tonik Stamina Cepat"),
-            ("Tombol [TAB] / [M]", "Minimap / Mute Audio"),
+            ("Tombol [1] - [4]", "Pakai Item/Boost di Kotak Hotbar Bawah (atau klik)"),
+            ("Tombol [TAB] / [F1]", "Ikon Minimap & Legenda / Tutorial Cepat"),
+            ("F11 / Alt+Enter", "Layar Penuh <-> Normal (Tepi/Maximize bisa ditarik)"),
             ("Tombol [ESC] / [H]", "Tutup menu / Buka Bantuan ini"),
         ]
 
         c_font = get_font(13, bold=True)
         d_font = get_font(13)
         for idx, (ctrl, desc) in enumerate(controls):
-            cy = hy + 60 + idx * 32
+            cy = hy + 56 + idx * 31
             surface.blit(c_font.render(ctrl, True, COLOR_GOLD), (hx + 28, cy))
             surface.blit(d_font.render(desc, True, COLOR_WHITE), (hx + 195, cy))
 
         close_txt = get_font(12, italic=True).render("[Tekan [H], [ESC], atau klik mana saja untuk kembali]", True, COLOR_TEXT_MUTED)
-        surface.blit(close_txt, (hx + hw // 2 - close_txt.get_width() // 2, hy + hh - 30))
+        surface.blit(close_txt, (hx + hw // 2 - close_txt.get_width() // 2, hy + hh - 28))
 
     def _draw_game_over(self, surface):
-        dim = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        view_w, view_h = get_screen_size(surface)
+        dim = pygame.Surface((view_w, view_h), pygame.SRCALPHA)
         dim.fill((25, 5, 5, 210))
         surface.blit(dim, (0, 0))
 
         gw, gh = 520, 260
-        gx = (SCREEN_WIDTH - gw) // 2
-        gy = (SCREEN_HEIGHT - gh) // 2
+        gx = (view_w - gw) // 2
+        gy = (view_h - gh) // 2
 
         pygame.draw.rect(surface, (28, 15, 18), (gx, gy, gw, gh), border_radius=12)
         pygame.draw.rect(surface, (180, 50, 50), (gx, gy, gw, gh), 2, border_radius=12)

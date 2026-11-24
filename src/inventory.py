@@ -5,10 +5,13 @@ Mendukung item konsumsi, senjata (equip), aksesori, dan material 4 rarity sesuai
 import os
 import pygame
 from src.config import (
-    SCREEN_WIDTH, SCREEN_HEIGHT, WEAPON_DATABASE, get_font,
+    get_screen_size, WEAPON_DATABASE, get_font,
     COLOR_PANEL_BG, COLOR_PANEL_BORDER, COLOR_PANEL_BORDER_LIGHT,
     COLOR_WHITE, COLOR_GOLD, COLOR_ASH, COLOR_TEXT_MUTED, COLOR_TEXT_ACCENT,
     HP_POTION_HEAL, STAMINA_TONIC_RESTORE,
+    ATTACK_BOOST_MULT, ATTACK_BOOST_DURATION,
+    DEFENSE_BOOST_FLAT, DEFENSE_BOOST_DURATION,
+    CRIT_BOOST_FLAT, CRIT_BOOST_DURATION,
 )
 from src.audio import audio_manager
 from src.combat import FloatingText
@@ -78,17 +81,32 @@ class Item:
         return colors.get(self.rarity, (200, 200, 200))
 
 
-# Database Item Game Lengkap (Sesuai GDD)
+# Database Item Game Lengkap
 ITEM_DATABASE = {
     "hp_potion": Item(
         "hp_potion", "Ramuan Pemulih (Health Potion)",
-        "Memulihkan 80 HP secara instan. Dibuat dari lumut rawa Oakhaven.",
-        category="consumable", rarity="uncommon", icon_file="Alchemy.png"
+        "Memulihkan 80 HP secara instan. Masuk ke Hotbar [1-4].",
+        category="consumable", rarity="uncommon", icon_file="potion_hp.png"
     ),
     "stamina_tonic": Item(
         "stamina_tonic", "Tonik Stamina (Stamina Tonic)",
-        "Memulihkan 60 Stamina secara instan.",
-        category="consumable", rarity="common", icon_file="BackgroundFlask.png"
+        "Memulihkan 60 Stamina secara instan. Masuk ke Hotbar [1-4].",
+        category="consumable", rarity="common", icon_file="potion_stamina.png"
+    ),
+    "attack_boost_potion": Item(
+        "attack_boost_potion", "Ramuan Amarah (ATK Boost 15s)",
+        "Meningkatkan Attack Power +50% selama 15 detik. Berguna di Dungeon lanjut!",
+        category="consumable", rarity="rare", icon_file="potion_atk.png"
+    ),
+    "defense_potion": Item(
+        "defense_potion", "Ramuan Zirah Baja (DEF Boost 20s)",
+        "Menambah +18 DEF selama 20 detik untuk menahan serangan berat Dungeon.",
+        category="consumable", rarity="rare", icon_file="potion_def.png"
+    ),
+    "crit_elixir": Item(
+        "crit_elixir", "Eliksir Fokus Kritis (Crit+ 20s)",
+        "Meningkatkan peluang Critical Strike +35% selama 20 detik.",
+        category="consumable", rarity="epic", icon_file="potion_crit.png"
     ),
     # Senjata (dapat di-equip langsung dari backpack)
     "ancestral_blade": Item(
@@ -171,18 +189,66 @@ ITEM_DATABASE = {
 
 
 class Inventory:
+    HOTBAR_SIZE = 4
+
     def __init__(self, capacity=16):
         self.capacity = capacity
         self.slots = [None] * capacity
+        self.hotbar_ids = [None] * self.HOTBAR_SIZE
         self.is_open = False
 
-        # Inisialisasi item awal penyintas
+        # Inisialisasi item & hotbar awal penyintas
         self.add_item("ancestral_blade", 1)
-        self.add_item("hp_potion", 5)
-        self.add_item("stamina_tonic", 3)
+        self.add_item("hp_potion", 4)
+        self.add_item("stamina_tonic", 2)
+        self.add_item("attack_boost_potion", 1)
 
     def reset_to_empty(self):
         self.slots = [None] * self.capacity
+        self.hotbar_ids = [None] * self.HOTBAR_SIZE
+
+    def bind_to_hotbar(self, item_id):
+        """Menempatkan item konsumsi/boost otomatis ke slot kotak hotbar bawah [1..4]."""
+        item_obj = ITEM_DATABASE.get(item_id)
+        if not item_obj or item_obj.category != "consumable":
+            return False
+        if item_id in self.hotbar_ids:
+            return True
+        for i in range(self.HOTBAR_SIZE):
+            if self.hotbar_ids[i] is None:
+                self.hotbar_ids[i] = item_id
+                return True
+        for i in range(self.HOTBAR_SIZE):
+            if self.get_count(self.hotbar_ids[i]) <= 0:
+                self.hotbar_ids[i] = item_id
+                return True
+        self.hotbar_ids[self.HOTBAR_SIZE - 1] = item_id
+        return True
+
+    def sync_hotbar_from_inventory(self):
+        """Menjaga slot hotbar selalu terisi item konsumsi yang dimiliki pemain."""
+        for slot in self.slots:
+            if slot and slot.get("item") and slot["item"].category == "consumable" and slot.get("count", 0) > 0:
+                self.bind_to_hotbar(slot["item"].id)
+
+    def get_hotbar_entries(self):
+        """Mengembalikan daftar 4 entri hotbar: (slot_idx, key_label, item_obj_or_None, count)."""
+        entries = []
+        for i in range(self.HOTBAR_SIZE):
+            item_id = self.hotbar_ids[i] if i < len(self.hotbar_ids) else None
+            item_obj = ITEM_DATABASE.get(item_id) if item_id else None
+            cnt = self.get_count(item_id) if item_id else 0
+            entries.append((i, str(i + 1), item_obj, cnt))
+        return entries
+
+    def use_hotbar_slot(self, hotbar_idx, player, combat_mgr=None):
+        """Memakai item dari kotak hotbar bawah layar [1..4]. Returns 'used', 'full', atau 'missing'."""
+        if hotbar_idx < 0 or hotbar_idx >= len(self.hotbar_ids):
+            return "missing"
+        item_id = self.hotbar_ids[hotbar_idx]
+        if not item_id or self.get_count(item_id) <= 0:
+            return "missing"
+        return self.use_item_by_id(item_id, player, combat_mgr)
 
     def toggle(self):
         self.is_open = not self.is_open
@@ -217,6 +283,8 @@ class Inventory:
                     slot["count"] += add_cnt
                     count -= add_cnt
                     if count <= 0:
+                        if item_obj.category == "consumable":
+                            self.bind_to_hotbar(item_id)
                         return True
 
         while count > 0:
@@ -230,6 +298,8 @@ class Inventory:
                     break
             if not found_empty:
                 return False
+        if item_obj.category == "consumable":
+            self.bind_to_hotbar(item_id)
         return True
 
     def remove_item(self, item_id, count=1):
@@ -327,6 +397,30 @@ class Inventory:
                     combat_mgr.floating_texts.append(
                         FloatingText(player.x + 24, player.y - 20, f"+{STAMINA_TONIC_RESTORE} Stamina", (120, 220, 255))
                     )
+        elif item.id == "attack_boost_potion":
+            player.apply_atk_boost(ATTACK_BOOST_MULT, ATTACK_BOOST_DURATION)
+            audio_manager.play_sound("powerup")
+            used = True
+            if combat_mgr:
+                combat_mgr.floating_texts.append(
+                    FloatingText(player.x + 24, player.y - 22, "ATK +50% (15s)!", (255, 130, 55), is_crit=True)
+                )
+        elif item.id == "defense_potion":
+            player.apply_def_boost(DEFENSE_BOOST_FLAT, DEFENSE_BOOST_DURATION)
+            audio_manager.play_sound("powerup")
+            used = True
+            if combat_mgr:
+                combat_mgr.floating_texts.append(
+                    FloatingText(player.x + 24, player.y - 22, f"DEF +{DEFENSE_BOOST_FLAT} (20s)!", (95, 185, 255), is_crit=True)
+                )
+        elif item.id == "crit_elixir":
+            player.apply_crit_boost(CRIT_BOOST_FLAT, CRIT_BOOST_DURATION)
+            audio_manager.play_sound("powerup")
+            used = True
+            if combat_mgr:
+                combat_mgr.floating_texts.append(
+                    FloatingText(player.x + 24, player.y - 22, "CRIT +35% (20s)!", (230, 120, 255), is_crit=True)
+                )
 
         if used:
             slot["count"] -= 1
@@ -343,10 +437,11 @@ class Inventory:
         return "missing"
 
     def _get_layout(self):
-        panel_w = 480
-        panel_h = 430
-        panel_x = (SCREEN_WIDTH - panel_w) // 2
-        panel_y = (SCREEN_HEIGHT - panel_h) // 2
+        view_w, view_h = get_screen_size()
+        panel_w = min(480, view_w - 40)
+        panel_h = min(430, view_h - 40)
+        panel_x = (view_w - panel_w) // 2
+        panel_y = (view_h - panel_h) // 2
         close_rect = pygame.Rect(panel_x + panel_w - 36, panel_y + 12, 24, 24)
 
         cols = 4
@@ -385,9 +480,10 @@ class Inventory:
         if not self.is_open:
             return
 
+        view_w, view_h = get_screen_size(surface)
         panel_x, panel_y, panel_w, panel_h, close_rect, slot_rects = self._get_layout()
 
-        dim_surf = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        dim_surf = pygame.Surface((view_w, view_h), pygame.SRCALPHA)
         dim_surf.fill((0, 0, 0, 140))
         surface.blit(dim_surf, (0, 0))
 
@@ -456,15 +552,16 @@ class Inventory:
             self._draw_tooltip(surface, hovered_slot["item"], mouse_pos)
 
     def _draw_tooltip(self, surface, item, mouse_pos):
+        view_w, view_h = get_screen_size(surface)
         mx, my = mouse_pos
         tt_w = 270
         tt_h = 104
         tt_x = mx + 15
         tt_y = my + 15
 
-        if tt_x + tt_w > SCREEN_WIDTH - 20:
+        if tt_x + tt_w > view_w - 20:
             tt_x = mx - tt_w - 15
-        if tt_y + tt_h > SCREEN_HEIGHT - 20:
+        if tt_y + tt_h > view_h - 20:
             tt_y = my - tt_h - 15
 
         tt_surf = pygame.Surface((tt_w, tt_h), pygame.SRCALPHA)

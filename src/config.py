@@ -5,11 +5,68 @@ senjata, dan helper cache font.
 """
 import pygame
 
-# Resolusi Layar & Display
-SCREEN_WIDTH = 1280
-SCREEN_HEIGHT = 720
+# Resolusi Layar & Display (Ukuran Normal Default & Viewport Responsif)
+DEFAULT_WIDTH = 1280
+DEFAULT_HEIGHT = 720
+MIN_VIEWPORT_WIDTH = 860
+MIN_VIEWPORT_HEIGHT = 620
+SCREEN_WIDTH = DEFAULT_WIDTH
+SCREEN_HEIGHT = DEFAULT_HEIGHT
+_ACTIVE_VIEW_SIZE = None
 FPS = 60
 TITLE = "Ashes of Oakhaven: The Hollow Crown"
+
+
+def compute_logical_size(win_w, win_h):
+    """Menghitung ukuran kanvas logis responsif yang menjaga aspek piksel 1:1 dan UI tetap utuh."""
+    win_w = max(1, int(win_w))
+    win_h = max(1, int(win_h))
+    aspect = win_w / win_h
+
+    h = float(DEFAULT_HEIGHT)
+    w = h * aspect
+    if w > float(DEFAULT_WIDTH):
+        w = float(DEFAULT_WIDTH)
+        h = w / aspect
+    if h < float(MIN_VIEWPORT_HEIGHT):
+        h = float(MIN_VIEWPORT_HEIGHT)
+        w = h * aspect
+    if w < float(MIN_VIEWPORT_WIDTH):
+        w = float(MIN_VIEWPORT_WIDTH)
+        h = w / aspect
+
+    return max(MIN_VIEWPORT_WIDTH, int(round(w))), max(MIN_VIEWPORT_HEIGHT, int(round(h)))
+
+
+def set_screen_size(width, height):
+    """Menyimpan ukuran viewport logis aktif untuk layout dan interaksi UI responsif."""
+    global SCREEN_WIDTH, SCREEN_HEIGHT, _ACTIVE_VIEW_SIZE
+    SCREEN_WIDTH = max(1, int(width))
+    SCREEN_HEIGHT = max(1, int(height))
+    _ACTIVE_VIEW_SIZE = (SCREEN_WIDTH, SCREEN_HEIGHT)
+    return _ACTIVE_VIEW_SIZE
+
+
+def get_screen_size(surface=None):
+    """Mengembalikan (lebar, tinggi) viewport aktif dari surface atau display."""
+    if surface is not None:
+        return surface.get_size()
+    if _ACTIVE_VIEW_SIZE is not None:
+        return _ACTIVE_VIEW_SIZE
+    disp = pygame.display.get_surface()
+    if disp is not None:
+        return disp.get_size()
+    return DEFAULT_WIDTH, DEFAULT_HEIGHT
+
+
+def window_to_logical(pos, win_size, logical_size):
+    """Memetakan koordinat mouse dari jendela fisik ke kanvas logis."""
+    mx, my = pos
+    ww, wh = win_size
+    lw, lh = logical_size
+    if ww <= 0 or wh <= 0:
+        return mx, my
+    return int(mx * lw / ww), int(my * lh / wh)
 
 # Map & Dimensi Default
 TILE_SIZE = 32
@@ -67,23 +124,31 @@ KEY_INVENTORY = pygame.K_b
 KEY_INVENTORY_ALT = pygame.K_i
 KEY_POTION_HP = pygame.K_1
 KEY_POTION_STAMINA = pygame.K_2
+KEY_ITEM_3 = pygame.K_3
+KEY_ITEM_4 = pygame.K_4
 KEY_HELP = pygame.K_h
 KEY_MUTE = pygame.K_m
 KEY_MINIMAP = pygame.K_TAB
 
 
-# Parameter Keseimbangan Combat (Basic attack ringan, skill berat tetap 30 STA)
+# Parameter Keseimbangan Combat & Buff Item
 BASIC_ATTACK_STAMINA = 5.0
 SKILL_ATTACK_STAMINA = 30.0
 DODGE_ROLL_STAMINA = 15.0
 STAMINA_REGEN_RATE = 24.0
 STAMINA_REGEN_DELAY = 0.6
-PLAYER_DAMAGE_SCALING = 1.65
+PLAYER_DAMAGE_SCALING = 1.15
 HP_POTION_HEAL = 80
 STAMINA_TONIC_RESTORE = 60
+ATTACK_BOOST_MULT = 1.50
+ATTACK_BOOST_DURATION = 15.0
+DEFENSE_BOOST_FLAT = 18
+DEFENSE_BOOST_DURATION = 20.0
+CRIT_BOOST_FLAT = 0.35
+CRIT_BOOST_DURATION = 20.0
 
 
-# Konfigurasi Bioma / Stage (Multiplier HP / DMG / SPD + Hazard + Spawn)
+# Konfigurasi Bioma / Dungeon 1-4 + Final Boss Domain (Progresi bertahap menuntut item & upgrade toko)
 STAGE_CONFIGS = {
     "map1safeworld.tmx": {
         "stage_num": 0,
@@ -93,54 +158,54 @@ STAGE_CONFIGS = {
         "hp_mult": 1.0, "dmg_mult": 1.0, "spd_mult": 1.0,
         "tier_mult": 1.0,
         "spawn": (584, 232),
-        "bgm": "bgm_lobby",
+        "bgm": "bgm_village",
     },
     "stage1_swamp.tmx": {
         "stage_num": 1,
-        "name": "Stage 1: Rawa Kematian (Selatan)",
+        "name": "Dungeon 1: Rawa Kematian (Selatan)",
         "rec_level": "Lv. 1 - 10",
         "hazard": "Lumpur Pekat (-30% SPD) & Jebakan Hisap",
-        "hp_mult": 1.0, "dmg_mult": 0.90, "spd_mult": 0.95,
+        "hp_mult": 1.0, "dmg_mult": 1.0, "spd_mult": 1.0,
         "tier_mult": 1.0,
         "spawn": (96, 608),
         "bgm": "bgm_dungeon",
     },
     "stage2_spore.tmx": {
         "stage_num": 2,
-        "name": "Stage 2: Hutan Spora Membara (Timur)",
+        "name": "Dungeon 2: Hutan Spora Membara (Timur)",
         "rec_level": "Lv. 11 - 25",
         "hazard": "Spora Peledak (AoE) & Kabut Racun (DoT)",
-        "hp_mult": 1.2, "dmg_mult": 1.15, "spd_mult": 1.05,
-        "tier_mult": 1.35,
+        "hp_mult": 1.85, "dmg_mult": 1.65, "spd_mult": 1.15,
+        "tier_mult": 1.45,
         "spawn": (96, 608),
         "bgm": "bgm_dungeon",
     },
     "stage3_gehenna.tmx": {
         "stage_num": 3,
-        "name": "Stage 3: Tungku Gehenna (Barat)",
+        "name": "Dungeon 3: Tungku Gehenna (Barat)",
         "rec_level": "Lv. 26 - 40",
         "hazard": "Conveyor Belt & Parit Lahar Panas",
-        "hp_mult": 1.5, "dmg_mult": 1.4, "spd_mult": 1.2,
-        "tier_mult": 1.75,
+        "hp_mult": 3.1, "dmg_mult": 2.55, "spd_mult": 1.3,
+        "tier_mult": 1.9,
         "spawn": (96, 608),
         "bgm": "bgm_boss",
     },
     "stage4_frost.tmx": {
         "stage_num": 4,
-        "name": "Stage 4: Benteng Salju Hitam (Utara)",
+        "name": "Dungeon 4: Benteng Salju Hitam (Utara)",
         "rec_level": "Lv. 41 - 55",
         "hazard": "Lantai Es Licin (Momentum Inersia)",
-        "hp_mult": 1.85, "dmg_mult": 1.75, "spd_mult": 1.35,
-        "tier_mult": 2.2,
+        "hp_mult": 4.8, "dmg_mult": 3.6, "spd_mult": 1.45,
+        "tier_mult": 2.4,
         "spawn": (608, 1120),
         "bgm": "bgm_boss",
     },
     "stage5_throne.tmx": {
         "stage_num": 5,
-        "name": "Stage 5: Ruang Takhta Obsidian (Pusat)",
+        "name": "Final Boss Domain: Ruang Takhta Obsidian",
         "rec_level": "Lv. 56 - 70",
-        "hazard": "Tanpa Cover Statis - Duel Murni 2 Fase",
-        "hp_mult": 2.2, "dmg_mult": 2.1, "spd_mult": 1.5,
+        "hazard": "Laser Tengkorak & Duel 2 Fase",
+        "hp_mult": 5.5, "dmg_mult": 3.8, "spd_mult": 1.55,
         "tier_mult": 3.0,
         "spawn": (608, 1100),
         "bgm": "bgm_throne",
@@ -150,7 +215,7 @@ STAGE_CONFIGS = {
         "name": "Ruang Bawah Tanah 1 (Klasik)",
         "rec_level": "Lv. 3+",
         "hazard": "Lorong Labirin",
-        "hp_mult": 1.0, "dmg_mult": 0.85, "spd_mult": 0.95,
+        "hp_mult": 1.1, "dmg_mult": 1.0, "spd_mult": 1.0,
         "tier_mult": 1.2,
         "spawn": (128, 288),
         "bgm": "bgm_dungeon",
@@ -160,8 +225,8 @@ STAGE_CONFIGS = {
         "name": "Ruang Bawah Tanah 2 (Klasik)",
         "rec_level": "Lv. 8+",
         "hazard": "Aula Penjaga Terkutuk",
-        "hp_mult": 1.25, "dmg_mult": 1.15, "spd_mult": 1.05,
-        "tier_mult": 1.5,
+        "hp_mult": 2.2, "dmg_mult": 1.85, "spd_mult": 1.2,
+        "tier_mult": 1.6,
         "spawn": (1120, 288),
         "bgm": "bgm_boss",
     },

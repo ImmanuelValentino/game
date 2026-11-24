@@ -2,9 +2,10 @@
 Sistem Quest, Dialog Typewriter, dan Peta Kartografi Dinamis Aell (World Map)
 untuk 'Ashes of Oakhaven: The Hollow Crown'.
 """
+import math
 import pygame
 from src.config import (
-    SCREEN_WIDTH, SCREEN_HEIGHT, STAGE_CONFIGS, get_font,
+    get_screen_size, STAGE_CONFIGS, get_font,
     COLOR_PANEL_BG, COLOR_PANEL_BORDER, COLOR_PANEL_BORDER_LIGHT,
     COLOR_WHITE, COLOR_GOLD, COLOR_TEXT_MUTED, COLOR_TEXT_ACCENT
 )
@@ -132,6 +133,8 @@ class DialogueSystem:
         self.char_index = 0
         self.typewriter_speed = 48.0
         self.beep_timer = 0.0
+        self.anim_time = 0.0
+        self.open_progress = 0.0
 
     def start_dialogue(self, npc_name, pages, portrait=None, choices=None):
         self.is_active = True
@@ -142,6 +145,8 @@ class DialogueSystem:
         self.choices = choices or []
         self.char_index = 0
         self.typewriter_text = ""
+        self.anim_time = 0.0
+        self.open_progress = 0.0
         audio_manager.play_sound("accept")
 
     def close(self):
@@ -151,6 +156,9 @@ class DialogueSystem:
     def update(self, dt):
         if not self.is_active or not self.dialogue_pages:
             return
+        self.anim_time += dt
+        if self.open_progress < 1.0:
+            self.open_progress = min(1.0, self.open_progress + dt * 6.0)
         full_text = self.dialogue_pages[self.current_page]
         if self.char_index < len(full_text):
             self.char_index += self.typewriter_speed * dt
@@ -180,14 +188,18 @@ class DialogueSystem:
             self.close()
 
     def _get_layout(self):
-        box_w = 980
+        view_w, view_h = get_screen_size()
+        box_w = min(980, view_w - 40)
         box_h = 190
-        box_x = (SCREEN_WIDTH - box_w) // 2
-        box_y = SCREEN_HEIGHT - box_h - 25
+        box_x = (view_w - box_w) // 2
+        box_y = view_h - box_h - 25
         start_cy = box_y + 125
+        n_choices = len(self.choices)
+        avail_w = box_w - 150
+        choice_w = min(245, max(160, (avail_w - max(0, n_choices - 1) * 14) // max(1, n_choices)))
         choice_rects = [
-            pygame.Rect(box_x + 130 + idx * 260, start_cy, 245, 36)
-            for idx in range(len(self.choices))
+            pygame.Rect(box_x + 130 + idx * (choice_w + 14), start_cy, choice_w, 36)
+            for idx in range(n_choices)
         ]
         return box_x, box_y, box_w, box_h, choice_rects
 
@@ -226,6 +238,8 @@ class DialogueSystem:
             return
 
         box_x, box_y, box_w, box_h, choice_rects = self._get_layout()
+        slide_offset = int((1.0 - self.open_progress) * 28) if hasattr(self, "open_progress") else 0
+        box_y += slide_offset
 
         panel_surf = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
         pygame.draw.rect(panel_surf, COLOR_PANEL_BG, (0, 0, box_w, box_h), border_radius=12)
@@ -233,12 +247,13 @@ class DialogueSystem:
         pygame.draw.rect(panel_surf, COLOR_PANEL_BORDER_LIGHT, (4, 4, box_w - 8, box_h - 8), 1, border_radius=10)
         surface.blit(panel_surf, (box_x, box_y))
 
-        portrait_box = pygame.Rect(box_x + 20, box_y + 20, 90, 90)
+        portrait_bob = int(math.sin(self.anim_time * 3.8) * 2.5) if hasattr(self, "anim_time") else 0
+        portrait_box = pygame.Rect(box_x + 20, box_y + 20 + portrait_bob, 90, 90)
         pygame.draw.rect(surface, (18, 20, 28), portrait_box, border_radius=8)
         pygame.draw.rect(surface, COLOR_PANEL_BORDER_LIGHT, portrait_box, 1, border_radius=8)
 
         if self.npc_portrait:
-            surface.blit(self.npc_portrait, (box_x + 25, box_y + 25))
+            surface.blit(self.npc_portrait, (box_x + 25, box_y + 25 + portrait_bob))
         else:
             p_font = get_font(32, bold=True)
             p_text = p_font.render(self.npc_name[:1], True, COLOR_GOLD)
@@ -290,11 +305,11 @@ class CartographyMapUI:
         self.is_open = False
         self.nodes = [
             # (tmx, title, subtitle, rel_x, rel_y, color, req_beacon)
-            ("stage4_frost.tmx", "4. Benteng Salju Hitam", "Bos: Valerius (Lv.41-55)", 0.50, 0.22, (130, 205, 250), "stage3_gehenna.tmx"),
-            ("stage3_gehenna.tmx", "3. Tungku Gehenna", "Bos: Ignis (Lv.26-40)", 0.21, 0.50, (240, 120, 45), "stage2_spore.tmx"),
-            ("stage5_throne.tmx", "5. Takhta Obsidian", "Final Boss: Mahkota Kutukan", 0.50, 0.50, (220, 60, 75), "stage4_frost.tmx"),
-            ("stage2_spore.tmx", "2. Hutan Spora Membara", "Bos: Vespa (Lv.11-25)", 0.79, 0.50, (185, 95, 235), "stage1_swamp.tmx"),
-            ("stage1_swamp.tmx", "1. Rawa Kematian", "Bos: Gargantua (Lv.1-10)", 0.50, 0.77, (110, 195, 115), None),
+            ("stage4_frost.tmx", "4. Dungeon 4: Salju Hitam", "Bos: Valerius (Lv.41-55)", 0.50, 0.22, (130, 205, 250), "stage3_gehenna.tmx"),
+            ("stage3_gehenna.tmx", "3. Dungeon 3: Tungku Gehenna", "Bos: Ignis (Lv.26-40)", 0.21, 0.50, (240, 120, 45), "stage2_spore.tmx"),
+            ("stage5_throne.tmx", "5. Final Boss Domain", "Mahkota Kutukan (Laser!)", 0.50, 0.50, (220, 60, 75), "stage4_frost.tmx"),
+            ("stage2_spore.tmx", "2. Dungeon 2: Hutan Spora", "Bos: Vespa (Lv.11-25)", 0.79, 0.50, (185, 95, 235), "stage1_swamp.tmx"),
+            ("stage1_swamp.tmx", "1. Dungeon 1: Rawa Kematian", "Bos: Gargantua (Lv.1-10)", 0.50, 0.77, (110, 195, 115), None),
             ("dungeon1.tmx", "Labirin Dungeon 1", "Ekspedisi Klasik", 0.19, 0.80, (140, 160, 195), None),
             ("dungeon2.tmx", "Labirin Dungeon 2", "Aula Raja Iblis", 0.81, 0.80, (180, 140, 210), None),
         ]
@@ -317,13 +332,15 @@ class CartographyMapUI:
         return False
 
     def _get_layout(self):
-        pw, ph = 820, 520
-        px = (SCREEN_WIDTH - pw) // 2
-        py = (SCREEN_HEIGHT - ph) // 2
+        view_w, view_h = get_screen_size()
+        pw, ph = min(820, view_w - 40), min(520, view_h - 40)
+        px = (view_w - pw) // 2
+        py = (view_h - ph) // 2
         close_rect = pygame.Rect(px + pw - 36, py + 16, 24, 24)
         node_rects = []
+        bw = min(215, max(175, int(pw * 0.26)))
+        bh = min(68, max(56, int(ph * 0.13)))
         for tmx, title, sub, rx, ry, col, req in self.nodes:
-            bw, bh = 215, 68
             bx = int(px + rx * pw - bw // 2)
             by = int(py + 60 + ry * (ph - 105) - bh // 2)
             node_rects.append((tmx, title, sub, col, req, pygame.Rect(bx, by, bw, bh)))
@@ -354,9 +371,10 @@ class CartographyMapUI:
     def draw(self, surface, mouse_pos, player):
         if not self.is_open:
             return
+        view_w, view_h = get_screen_size(surface)
         px, py, pw, ph, close_rect, node_rects = self._get_layout()
 
-        dim = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        dim = pygame.Surface((view_w, view_h), pygame.SRCALPHA)
         dim.fill((0, 0, 0, 165))
         surface.blit(dim, (0, 0))
 

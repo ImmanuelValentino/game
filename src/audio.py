@@ -51,6 +51,7 @@ class AudioManager:
             "projectile": "projectile.wav",
             "explosion": "explosion.wav",
             "parry": "parry.wav",
+            "laser": "laser.wav",
             "ending_good": "ending_good.wav",
             "ending_bad": "ending_bad.wav",
         }

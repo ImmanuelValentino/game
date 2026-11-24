@@ -62,6 +62,7 @@ class SaveSystem:
                 "x": player.x,
                 "y": player.y,
                 "inventory": inv_data,
+                "hotbar_ids": list(getattr(inventory, "hotbar_ids", [None] * 4)),
                 "quest": quest_data
             }
 
@@ -128,6 +129,17 @@ class SaveSystem:
             player.saved_map = data.get("current_map", "map1safeworld.tmx")
 
             inventory.slots = new_slots
+            saved_hb = data.get("hotbar_ids")
+            if isinstance(saved_hb, list):
+                inventory.hotbar_ids = [
+                    hid if hid in ITEM_DATABASE else None
+                    for hid in saved_hb[:inventory.HOTBAR_SIZE]
+                ]
+                while len(inventory.hotbar_ids) < inventory.HOTBAR_SIZE:
+                    inventory.hotbar_ids.append(None)
+            else:
+                inventory.hotbar_ids = [None] * inventory.HOTBAR_SIZE
+            inventory.sync_hotbar_from_inventory()
 
             q_data = data.get("quest", {})
             saved_quests = {q["id"]: q for q in q_data.get("quests", []) if "id" in q}

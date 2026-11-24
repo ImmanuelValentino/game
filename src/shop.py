@@ -7,7 +7,7 @@ Mengimplementasikan sistem ekonomi & Karma GDD:
 """
 import pygame
 from src.config import (
-    SCREEN_WIDTH, SCREEN_HEIGHT, get_font,
+    get_screen_size, get_font,
     COLOR_PANEL_BG, COLOR_PANEL_BORDER, COLOR_PANEL_BORDER_LIGHT,
     COLOR_WHITE, COLOR_GOLD, COLOR_ASH, COLOR_TEXT_MUTED, COLOR_TEXT_ACCENT
 )
@@ -21,12 +21,12 @@ class ShopManager:
         self.is_brog_open = False
         self.is_vektor_open = False
 
-        # Daftar Barang Toko Gael (Pedagang Senjata)
+        # Daftar Barang Toko Gael (Pedagang Senjata, Ramuan, & Boost)
         self.merchant_goods = [
             {
                 "id": "hp_potion",
                 "name": "Ramuan Pemulih HP",
-                "desc": "Memulihkan 80 HP seketika.",
+                "desc": "Pulihkan 80 HP instan (Hotbar).",
                 "cost": 20,
                 "type": "item",
                 "count": 1,
@@ -34,39 +34,63 @@ class ShopManager:
             {
                 "id": "stamina_tonic",
                 "name": "Tonik Stamina",
-                "desc": "Memulihkan 60 Stamina seketika.",
+                "desc": "Pulihkan 60 STA instan (Hotbar).",
                 "cost": 15,
+                "type": "item",
+                "count": 1,
+            },
+            {
+                "id": "attack_boost_potion",
+                "name": "Ramuan Amarah (ATK+)",
+                "desc": "+50% Attack Power selama 15 detik.",
+                "cost": 35,
+                "type": "item",
+                "count": 1,
+            },
+            {
+                "id": "defense_potion",
+                "name": "Ramuan Zirah (DEF+)",
+                "desc": "+18 DEF selama 20 detik.",
+                "cost": 30,
+                "type": "item",
+                "count": 1,
+            },
+            {
+                "id": "crit_elixir",
+                "name": "Eliksir Fokus (Crit+)",
+                "desc": "+35% Crit Chance selama 20 detik.",
+                "cost": 40,
                 "type": "item",
                 "count": 1,
             },
             {
                 "id": "armor_up",
                 "name": "Pelindung Zirah (+4 DEF)",
-                "desc": "Mengurangi damage musuh sesuai formula DEF.",
+                "desc": "Kurangi damage musuh permanen.",
                 "cost": 70,
                 "type": "upgrade_armor",
                 "val": 4,
             },
             {
                 "id": "boots_up",
-                "name": "Sepatu Bayangan (+26 Speed)",
-                "desc": "Meningkatkan kecepatan gerak & manuver.",
+                "name": "Sepatu Bayangan (+26 SPD)",
+                "desc": "Kecepatan gerak & dodge lincah.",
                 "cost": 65,
                 "type": "upgrade_speed",
                 "val": 26.0,
             },
             {
                 "id": "redemption_blade_1",
-                "name": "Bilah Penebusan +1 (ATK +115)",
-                "desc": "Senjata tempaan suci yang dapat di-upgrade Vektor (+10 Karma).",
+                "name": "Bilah Penebusan +1",
+                "desc": "ATK +115, +10 Karma Good Ending.",
                 "cost": 120,
                 "type": "weapon",
                 "karma": 10,
             },
             {
                 "id": "bloodthirst_blade",
-                "name": "Pedang Haus Darah [TERLARANG]",
-                "desc": "ATK +320 & Drop x1.5, namun -50 Karma (Mengunci Bad Ending!).",
+                "name": "Pedang Haus Darah",
+                "desc": "ATK +320, Drop x1.5, -50 Karma.",
                 "cost": 220,
                 "type": "weapon",
                 "karma": -50,
@@ -113,36 +137,46 @@ class ShopManager:
         return False
 
     def _get_merchant_layout(self):
-        panel_w = 590
-        panel_h = 520
-        panel_x = (SCREEN_WIDTH - panel_w) // 2
-        panel_y = (SCREEN_HEIGHT - panel_h) // 2
+        view_w, view_h = get_screen_size()
+        cols = 2
+        num_rows = (len(self.merchant_goods) + cols - 1) // cols
+        panel_w = min(780, view_w - 40)
+        panel_h = min(500, 128 + num_rows * 66)
+        panel_x = (view_w - panel_w) // 2
+        panel_y = (view_h - panel_h) // 2
         close_rect = pygame.Rect(panel_x + panel_w - 36, panel_y + 16, 24, 24)
         start_y = panel_y + 78
+        gap_x = 12
+        card_w = (panel_w - 40 - gap_x) // cols
         row_h = 64
         rows = []
         for idx, item in enumerate(self.merchant_goods):
-            ry = start_y + idx * row_h
-            row_rect = pygame.Rect(panel_x + 20, ry, panel_w - 40, 58)
-            buy_btn = pygame.Rect(panel_x + panel_w - 115, ry + 12, 88, 34)
+            col_i = idx % cols
+            row_i = idx // cols
+            rx = panel_x + 20 + col_i * (card_w + gap_x)
+            ry = start_y + row_i * row_h
+            row_rect = pygame.Rect(rx, ry, card_w, 56)
+            buy_btn = pygame.Rect(rx + card_w - 78, ry + 11, 68, 34)
             rows.append((item, row_rect, buy_btn))
         return panel_x, panel_y, panel_w, panel_h, close_rect, rows
 
     def _get_brog_layout(self):
-        panel_w = 460
-        panel_h = 340
-        panel_x = (SCREEN_WIDTH - panel_w) // 2
-        panel_y = (SCREEN_HEIGHT - panel_h) // 2
+        view_w, view_h = get_screen_size()
+        panel_w = min(460, view_w - 40)
+        panel_h = min(340, view_h - 40)
+        panel_x = (view_w - panel_w) // 2
+        panel_y = (view_h - panel_h) // 2
         close_rect = pygame.Rect(panel_x + panel_w - 36, panel_y + 16, 24, 24)
-        btn1 = pygame.Rect(panel_x + 40, panel_y + 135, 380, 52)
-        btn2 = pygame.Rect(panel_x + 40, panel_y + 205, 380, 52)
+        btn1 = pygame.Rect(panel_x + 40, panel_y + 135, panel_w - 80, 52)
+        btn2 = pygame.Rect(panel_x + 40, panel_y + 205, panel_w - 80, 52)
         return panel_x, panel_y, panel_w, panel_h, close_rect, btn1, btn2
 
     def _get_vektor_layout(self):
-        panel_w = 590
-        panel_h = 490
-        panel_x = (SCREEN_WIDTH - panel_w) // 2
-        panel_y = (SCREEN_HEIGHT - panel_h) // 2
+        view_w, view_h = get_screen_size()
+        panel_w = min(590, view_w - 40)
+        panel_h = min(490, view_h - 40)
+        panel_x = (view_w - panel_w) // 2
+        panel_y = (view_h - panel_h) // 2
         close_rect = pygame.Rect(panel_x + panel_w - 36, panel_y + 16, 24, 24)
         sell_btn = pygame.Rect(panel_x + 24, panel_y + 108, panel_w - 48, 48)
         skill_btns = [
@@ -378,9 +412,10 @@ class ShopManager:
             self._draw_vektor_ui(surface, mouse_pos, player, inventory)
 
     def _draw_merchant_ui(self, surface, mouse_pos, player):
+        view_w, view_h = get_screen_size(surface)
         panel_x, panel_y, panel_w, panel_h, close_rect, rows = self._get_merchant_layout()
 
-        dim = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        dim = pygame.Surface((view_w, view_h), pygame.SRCALPHA)
         dim.fill((0, 0, 0, 150))
         surface.blit(dim, (0, 0))
 
@@ -400,9 +435,9 @@ class ShopManager:
         c_surf = c_font.render("X", True, (220, 80, 80))
         surface.blit(c_surf, (close_rect.centerx - c_surf.get_width() // 2, close_rect.centery - c_surf.get_height() // 2))
 
-        name_font = get_font(14, bold=True)
-        desc_font = get_font(11)
-        btn_font = get_font(13, bold=True)
+        name_font = get_font(12, bold=True)
+        desc_font = get_font(10)
+        btn_font = get_font(12, bold=True)
 
         for item, r_rect, buy_btn in rows:
             is_hover = r_rect.collidepoint(mouse_pos)
@@ -413,8 +448,8 @@ class ShopManager:
 
             n_surf = name_font.render(item["name"], True, (255, 110, 110) if is_cursed else COLOR_WHITE)
             d_surf = desc_font.render(item["desc"], True, COLOR_TEXT_MUTED)
-            surface.blit(n_surf, (r_rect.x + 12, r_rect.y + 8))
-            surface.blit(d_surf, (r_rect.x + 12, r_rect.y + 31))
+            surface.blit(n_surf, (r_rect.x + 10, r_rect.y + 8))
+            surface.blit(d_surf, (r_rect.x + 10, r_rect.y + 28))
 
             can_afford = player.gold >= item["cost"]
             b_hover = buy_btn.collidepoint(mouse_pos)
@@ -436,9 +471,10 @@ class ShopManager:
         surface.blit(h_text, (panel_x + panel_w - h_text.get_width() - 24, panel_y + panel_h - 32))
 
     def _draw_brog_ui(self, surface, mouse_pos, player):
+        view_w, view_h = get_screen_size(surface)
         panel_x, panel_y, panel_w, panel_h, close_rect, btn1, btn2 = self._get_brog_layout()
 
-        dim = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        dim = pygame.Surface((view_w, view_h), pygame.SRCALPHA)
         dim.fill((0, 0, 0, 150))
         surface.blit(dim, (0, 0))
 
@@ -489,9 +525,10 @@ class ShopManager:
         surface.blit(h_text, (panel_x + panel_w // 2 - h_text.get_width() // 2, panel_y + panel_h - 32))
 
     def _draw_vektor_ui(self, surface, mouse_pos, player, inventory=None):
+        view_w, view_h = get_screen_size(surface)
         panel_x, panel_y, panel_w, panel_h, close_rect, sell_btn, skill_btns = self._get_vektor_layout()
 
-        dim = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        dim = pygame.Surface((view_w, view_h), pygame.SRCALPHA)
         dim.fill((0, 0, 0, 155))
         surface.blit(dim, (0, 0))
 

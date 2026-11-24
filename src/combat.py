@@ -8,8 +8,10 @@ Mengimplementasikan:
 - Jebakan Spora Peledak (Stage 2) & Weighted RNG Drop Table (4 tier rarity)
 """
 import math
+import os
 import random
 import pygame
+from PIL import Image
 from src.config import (
     COLOR_WHITE, COLOR_CRIT, COLOR_GOLD, COLOR_EXP, COLOR_ASH, get_font,
     BASIC_ATTACK_STAMINA, SKILL_ATTACK_STAMINA, PLAYER_DAMAGE_SCALING,
@@ -18,11 +20,30 @@ from src.audio import audio_manager
 
 
 DROP_TABLE_TIERS = [
-    ("epic", 0.02, ["general_core", "broken_crown"]),
-    ("rare", 0.08, ["karak_blood", "pure_steel"]),
-    ("uncommon", 0.20, ["spore_intact", "ice_core"]),
-    ("common", 0.70, ["bone_shard", "rust_iron"]),
+    ("epic", 0.03, ["general_core", "broken_crown"]),
+    ("rare", 0.10, ["karak_blood", "pure_steel"]),
+    ("uncommon", 0.24, ["spore_intact", "ice_core"]),
+    ("common", 0.63, ["bone_shard", "rust_iron"]),
 ]
+
+
+def roll_consumable_drop(is_boss=False, tier_mult=1.0, player_drop_mult=1.0):
+    """Drop ramuan/boost fungsional dari monster agar langsung masuk ke Hotbar bawah."""
+    if is_boss:
+        return random.choice(["hp_potion", "attack_boost_potion", "defense_potion", "crit_elixir"])
+    chance = min(0.55, 0.28 * max(1.0, tier_mult * 0.85) * player_drop_mult)
+    if random.random() > chance:
+        return None
+    roll = random.random()
+    if roll < 0.38:
+        return "hp_potion"
+    if roll < 0.62:
+        return "attack_boost_potion"
+    if roll < 0.80:
+        return "stamina_tonic"
+    if roll < 0.92:
+        return "defense_potion"
+    return "crit_elixir"
 
 
 def roll_material_drop(tier_mult=1.0, is_boss=False, player_drop_mult=1.0):
@@ -244,6 +265,184 @@ class SporeTrap:
         pygame.draw.circle(surface, (210, 255, 140), (cx, cy), max(3, r // 2))
 
 
+def _load_skull_frames(path):
+    frames = []
+    if os.path.exists(path):
+        try:
+            with Image.open(path) as im:
+                for i in range(im.n_frames):
+                    im.seek(i)
+                    rgba = im.convert("RGBA")
+                    from_bytes = getattr(pygame.image, "frombytes", pygame.image.fromstring)
+                    surf = from_bytes(rgba.tobytes(), rgba.size, "RGBA")
+                    frames.append(pygame.transform.scale(surf, (44, 44)))
+        except Exception:
+            frames = []
+    if not frames:
+        fallback = pygame.Surface((44, 44), pygame.SRCALPHA)
+        pygame.draw.circle(fallback, (220, 210, 230), (22, 20), 14)
+        pygame.draw.circle(fallback, (255, 60, 90), (16, 18), 4)
+        pygame.draw.circle(fallback, (255, 60, 90), (28, 18), 4)
+        frames = [fallback]
+    return frames
+
+
+class SkullLaserBarrage:
+    """
+    Serangan Khusus Final Boss Domain: 6 Kepala Tengkorak Laser tak bisa dihancurkan.
+    Muncul dalam formasi 3 atas + 3 bawah atau 3 kiri + 3 kanan di tepi layar terlihat -> telegraph -> laser.
+    """
+    _FRAME_CACHE = {}
+
+    def __init__(self, formation="top_bottom", damage=260, map_w=1280, map_h=1280, focus_x=640, focus_y=640):
+        self.formation = formation if formation in ("top_bottom", "left_right") else "top_bottom"
+        self.damage = int(damage)
+        self.map_w = int(map_w)
+        self.map_h = int(map_h)
+        self.focus_x = float(focus_x)
+        self.focus_y = float(focus_y)
+
+        self.telegraph_duration = 1.35
+        self.fire_duration = 1.20
+        self.fade_duration = 0.35
+        self.elapsed = 0.0
+        self.alive = True
+        self.state = "telegraph"  # telegraph | firing | fadeout
+        self.hit_cd = 0.0
+        self._fired_sfx = False
+
+        if not SkullLaserBarrage._FRAME_CACHE:
+            SkullLaserBarrage._FRAME_CACHE["idle"] = _load_skull_frames("character/boss_skull/idle.gif")
+            SkullLaserBarrage._FRAME_CACHE["charge"] = _load_skull_frames("character/boss_skull/charge.gif")
+
+        self.skulls = []  # list of dict: x, y, dx, dy, rect
+        self._build_formation()
+
+    def _build_formation(self):
+        beam_half = 13
+        # Posisikan 6 tengkorak pada rentang arena yang terlihat kamera pemain agar selalu tampak jelas
+        half_vh = 265.0
+        half_vw = 470.0
+        top_y = max(92.0, min(self.map_h - 620.0, self.focus_y - half_vh))
+        bot_y = min(float(self.map_h - 92), max(top_y + 440.0, self.focus_y + half_vh))
+        left_x = max(92.0, min(self.map_w - 760.0, self.focus_x - half_vw))
+        right_x = min(float(self.map_w - 92), max(left_x + 760.0, self.focus_x + half_vw))
+
+        if self.formation == "top_bottom":
+            # 3 tengkorak di sisi atas + 3 tengkorak di sisi bawah (jalur selang-seling)
+            span_h = max(120, int(bot_y - top_y))
+            cx0 = max(180.0, self.focus_x - 380.0)
+            step_x = 180.0
+            for idx in range(3):
+                x = min(self.map_w - 140.0, cx0 + idx * (step_x * 2))
+                rect = pygame.Rect(int(x - beam_half), int(top_y), beam_half * 2, span_h)
+                self.skulls.append({"x": float(x), "y": float(top_y), "dx": 0, "dy": 1, "rect": rect})
+            for idx in range(3):
+                x = min(self.map_w - 100.0, cx0 + step_x + idx * (step_x * 2))
+                rect = pygame.Rect(int(x - beam_half), int(top_y), beam_half * 2, span_h)
+                self.skulls.append({"x": float(x), "y": float(bot_y), "dx": 0, "dy": -1, "rect": rect})
+        else:
+            # 3 tengkorak di sisi kiri + 3 tengkorak di sisi kanan (jalur selang-seling)
+            span_w = max(120, int(right_x - left_x))
+            cy0 = max(160.0, self.focus_y - 220.0)
+            step_y = 95.0
+            for idx in range(3):
+                y = min(self.map_h - 140.0, cy0 + idx * (step_y * 2))
+                rect = pygame.Rect(int(left_x), int(y - beam_half), span_w, beam_half * 2)
+                self.skulls.append({"x": float(left_x), "y": float(y), "dx": 1, "dy": 0, "rect": rect})
+            for idx in range(3):
+                y = min(self.map_h - 100.0, cy0 + step_y + idx * (step_y * 2))
+                rect = pygame.Rect(int(left_x), int(y - beam_half), span_w, beam_half * 2)
+                self.skulls.append({"x": float(right_x), "y": float(y), "dx": -1, "dy": 0, "rect": rect})
+
+    def update(self, dt, player=None, combat_mgr=None):
+        if not self.alive:
+            return False
+        self.elapsed += dt
+        if self.hit_cd > 0:
+            self.hit_cd = max(0.0, self.hit_cd - dt)
+
+        t_fire = self.telegraph_duration
+        t_fade = t_fire + self.fire_duration
+        t_end = t_fade + self.fade_duration
+
+        if self.elapsed < t_fire:
+            self.state = "telegraph"
+        elif self.elapsed < t_fade:
+            if not self._fired_sfx:
+                self._fired_sfx = True
+                audio_manager.play_sound("laser")
+                if combat_mgr:
+                    combat_mgr.trigger_shake(0.25, 5.0)
+            self.state = "firing"
+            if player is not None and not player.is_dead and self.hit_cd <= 0:
+                phb = player.get_hitbox()
+                if any(phb.colliderect(sk["rect"]) for sk in self.skulls):
+                    dealt = player.take_damage(self.damage)
+                    pc_x, pc_y = player.x + 24, player.y + 24
+                    if dealt > 0:
+                        self.hit_cd = 0.45
+                        if combat_mgr:
+                            combat_mgr.floating_texts.append(
+                                FloatingText(pc_x, player.y - 14, f"-{dealt} LASER!", (255, 70, 120), font_size=18, is_crit=True)
+                            )
+                    elif getattr(player, "dodged_last_hit", False):
+                        player.dodged_last_hit = False
+                        self.hit_cd = 0.45
+                        if combat_mgr:
+                            combat_mgr.floating_texts.append(
+                                FloatingText(pc_x, player.y - 20, "PERFECT DODGE LASER! +15 ST", (110, 220, 255), font_size=16, is_crit=True)
+                            )
+        elif self.elapsed < t_end:
+            self.state = "fadeout"
+        else:
+            self.alive = False
+            return False
+        return True
+
+    def draw(self, surface, camera_x, camera_y):
+        frames = SkullLaserBarrage._FRAME_CACHE["charge" if self.state != "fadeout" else "idle"]
+        frame_idx = int(self.elapsed * 9.0) % len(frames)
+        sprite = frames[frame_idx]
+
+        alpha = 255
+        if self.state == "fadeout":
+            p = (self.elapsed - (self.telegraph_duration + self.fire_duration)) / max(0.01, self.fade_duration)
+            alpha = max(0, int(255 * (1.0 - p)))
+
+        for sk in self.skulls:
+            sx = int(sk["x"] - camera_x)
+            sy = int(sk["y"] - camera_y)
+            r = sk["rect"].move(-int(camera_x), -int(camera_y))
+
+            if self.state == "telegraph":
+                pulse = 110 + int(abs(math.sin(self.elapsed * 12.0)) * 120)
+                line_surf = pygame.Surface((max(4, r.width), max(4, r.height)), pygame.SRCALPHA)
+                pygame.draw.rect(line_surf, (255, 50, 90, int(pulse * 0.30)), (0, 0, r.width, r.height))
+                if sk["dx"] == 0:
+                    pygame.draw.line(line_surf, (255, 110, 140, pulse), (r.width // 2, 0), (r.width // 2, r.height), 2)
+                else:
+                    pygame.draw.line(line_surf, (255, 110, 140, pulse), (0, r.height // 2), (r.width, r.height // 2), 2)
+                surface.blit(line_surf, r.topleft)
+            elif self.state == "firing":
+                beam_surf = pygame.Surface((max(4, r.width), max(4, r.height)), pygame.SRCALPHA)
+                pygame.draw.rect(beam_surf, (190, 40, 235, 130), (0, 0, r.width, r.height), border_radius=6)
+                if sk["dx"] == 0:
+                    pygame.draw.rect(beam_surf, (255, 65, 95, 225), (4, 0, max(2, r.width - 8), r.height))
+                    pygame.draw.rect(beam_surf, (255, 240, 245, 255), (max(0, r.width // 2 - 3), 0, 6, r.height))
+                else:
+                    pygame.draw.rect(beam_surf, (255, 65, 95, 225), (0, 4, r.width, max(2, r.height - 8)))
+                    pygame.draw.rect(beam_surf, (255, 240, 245, 255), (0, max(0, r.height // 2 - 3), r.width, 6))
+                surface.blit(beam_surf, r.topleft)
+
+            if alpha < 255:
+                s_copy = sprite.copy()
+                s_copy.set_alpha(alpha)
+                surface.blit(s_copy, (sx - 22, sy - 22))
+            else:
+                surface.blit(sprite, (sx - 22, sy - 22))
+
+
 class CombatManager:
     def __init__(self):
         self.attack_cooldown = 0.22
@@ -256,6 +455,7 @@ class CombatManager:
         self.floating_texts = []
         self.projectiles = []
         self.traps = []
+        self.skull_barrages = []
         self.screen_shake_time = 0.0
         self.screen_shake_intensity = 0.0
 
@@ -264,6 +464,16 @@ class CombatManager:
         self.floating_texts.clear()
         self.projectiles.clear()
         self.traps.clear()
+        self.skull_barrages.clear()
+
+    def trigger_skull_lasers(self, formation="top_bottom", damage=260, map_w=1280, map_h=1280, focus_x=640, focus_y=640):
+        """Memunculkan 6 kepala tengkorak invincible penembak laser di Final Boss Domain."""
+        if any(b.alive for b in self.skull_barrages):
+            return False
+        self.skull_barrages.append(
+            SkullLaserBarrage(formation=formation, damage=damage, map_w=map_w, map_h=map_h, focus_x=focus_x, focus_y=focus_y)
+        )
+        return True
 
     def spawn_projectile(self, x, y, angle_rad, speed=230.0, damage=30, radius=7, color=(220, 90, 255)):
         self.projectiles.append(Projectile(x, y, angle_rad, speed=speed, damage=damage, radius=radius, color=color))
@@ -284,6 +494,7 @@ class CombatManager:
         self.floating_texts = [t for t in self.floating_texts if t.update(dt)]
         self.projectiles = [p for p in self.projectiles if p.update(dt, player, map_loader, self)]
         self.traps = [tr for tr in self.traps if tr.update(dt, player, self)]
+        self.skull_barrages = [b for b in self.skull_barrages if b.update(dt, player=player, combat_mgr=self)]
 
     def get_shake_offset(self):
         if self.screen_shake_time > 0:
@@ -392,11 +603,12 @@ class CombatManager:
         atk_sum = player.total_damage * (1.85 if is_skill else 1.0)
 
         used_perfect_crit = False
+        crit_rate = getattr(player, "effective_crit_chance", player.crit_chance)
         if player.next_attack_crit_buff:
             is_crit = True
             mod = 1.5
             used_perfect_crit = True
-        elif random.random() < player.crit_chance or is_skill:
+        elif random.random() < crit_rate or is_skill:
             is_crit = True
             mod = 1.5
         else:
@@ -436,17 +648,28 @@ class CombatManager:
                 player.gold += reward_gold
                 self.floating_texts.append(FloatingText(tc_x, tc_y - 74, f"+{reward_gold} Gold", COLOR_GOLD, font_size=15))
 
-            # Weighted RNG Drop Material ke Inventory (hanya untuk monster nyata, bukan dummy jerami)
+            # Weighted RNG Drop Material + Peluang Drop Ramuan/Boost ke Hotbar (hanya untuk monster nyata)
             if inventory is not None and getattr(target, "is_monster", False):
+                is_boss_target = getattr(target, "is_boss", False)
                 drop_id = roll_material_drop(
                     tier_mult=tier_mult,
-                    is_boss=getattr(target, "is_boss", False),
+                    is_boss=is_boss_target,
                     player_drop_mult=player.drop_multiplier,
                 )
                 if drop_id and inventory.add_item(drop_id, 1):
                     d_item = ITEM_DATABASE[drop_id]
                     self.floating_texts.append(
                         FloatingText(tc_x, tc_y - 90, f"+1 {d_item.name}", d_item.get_rarity_color(), font_size=14, is_crit=True)
+                    )
+                cons_drop = roll_consumable_drop(
+                    is_boss=is_boss_target,
+                    tier_mult=tier_mult,
+                    player_drop_mult=player.drop_multiplier,
+                )
+                if cons_drop and inventory.add_item(cons_drop, 1):
+                    c_item = ITEM_DATABASE[cons_drop]
+                    self.floating_texts.append(
+                        FloatingText(tc_x, tc_y - 108, f"+1 {c_item.name} [Hotbar]", (130, 245, 195), font_size=13, is_crit=True)
                     )
 
         return used_perfect_crit
@@ -458,5 +681,7 @@ class CombatManager:
             effect.draw(surface, camera_x, camera_y)
         for proj in self.projectiles:
             proj.draw(surface, camera_x, camera_y)
+        for barrage in self.skull_barrages:
+            barrage.draw(surface, camera_x, camera_y)
         for ft in self.floating_texts:
             ft.draw(surface, camera_x, camera_y)

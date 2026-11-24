@@ -535,7 +535,7 @@ def generate_characters_and_bosses():
 
 
 # =============================================================================
-# 4. GENERATOR AUDIO PROCEDURAL (.wav) UNTUK DUNGEON, BOSS, DETAK JANTUNG, SFX
+# 4. GENERATOR AUDIO PROCEDURAL (.wav) - LOBBY ZELDA, DUNGEON BATTLE, FINAL DOMAIN
 # =============================================================================
 def _write_wav(path, samples, sample_rate=22050):
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -548,6 +548,72 @@ def _write_wav(path, samples, sample_rate=22050):
             val = max(-32767, min(32767, int(s * 32767)))
             frames.extend(struct.pack("<h", val))
         wf.writeframes(bytes(frames))
+
+
+def _mix_track(duration_sec, sr, render_fn):
+    n = int(sr * duration_sec)
+    buf = [0.0] * n
+    render_fn(buf, sr, n)
+    # Soft loop crossfade di 20ms terakhir agar loop seamless tanpa klik
+    fade = min(int(sr * 0.025), n // 10)
+    for i in range(fade):
+        w = i / fade
+        buf[i] *= w
+        buf[n - 1 - i] *= w
+    peak = max((abs(v) for v in buf), default=1.0)
+    if peak > 0.92:
+        scale = 0.90 / peak
+        buf = [v * scale for v in buf]
+    return buf
+
+
+def _add_voice(buf, sr, start_s, dur_s, freq, amp=0.18, timbre="flute", vibrato=0.0):
+    if freq <= 0:
+        return
+    i0 = max(0, int(start_s * sr))
+    n = int(dur_s * sr)
+    for k in range(n):
+        idx = i0 + k
+        if idx >= len(buf):
+            break
+        t = k / sr
+        env = min(1.0, k / max(1, int(sr * 0.035))) * max(0.0, 1.0 - (k / max(1, n)) ** 1.35)
+        f = freq * (1.0 + vibrato * math.sin(2.0 * math.pi * 5.2 * t))
+        ph = 2.0 * math.pi * f * t
+        if timbre == "harp":
+            val = 0.65 * math.sin(ph) + 0.25 * math.sin(2 * ph) + 0.10 * math.sin(3 * ph)
+            env = min(1.0, k / max(1, int(sr * 0.01))) * math.exp(-t * 4.5)
+        elif timbre == "flute":
+            val = 0.78 * math.sin(ph) + 0.16 * math.sin(2 * ph) + 0.06 * math.sin(3 * ph)
+        elif timbre == "strings":
+            tri = 2.0 * abs(2.0 * ((t * f) % 1.0) - 1.0) - 1.0
+            val = 0.55 * tri + 0.35 * math.sin(ph) + 0.15 * math.sin(2 * ph)
+        elif timbre == "organ":
+            val = 0.50 * math.sin(ph) + 0.30 * math.sin(2 * ph) + 0.22 * math.sin(3 * ph) + 0.12 * math.sin(0.5 * ph)
+        else:
+            val = math.sin(ph)
+        buf[idx] += val * amp * env
+
+
+def _add_drum(buf, sr, start_s, kind="kick", amp=0.25):
+    i0 = max(0, int(start_s * sr))
+    dur = 0.22 if kind == "kick" else 0.12
+    n = int(dur * sr)
+    for k in range(n):
+        idx = i0 + k
+        if idx >= len(buf):
+            break
+        t = k / sr
+        if kind == "kick":
+            f = 135 * math.exp(-t * 16.0) + 42.0
+            val = math.sin(2.0 * math.pi * f * t) * math.exp(-t * 12.0)
+        elif kind == "snare":
+            tone = math.sin(2.0 * math.pi * 190 * t) * 0.35
+            noise = random.uniform(-0.75, 0.75) * 0.65
+            val = (tone + noise) * math.exp(-t * 22.0)
+        else:  # hat
+            val = random.uniform(-0.6, 0.6) * math.exp(-t * 45.0)
+        buf[idx] += val * amp
 
 
 def _gen_tone_seq(notes, dur_each=0.35, amp=0.22, wave_type="sine", sr=22050):
@@ -592,28 +658,185 @@ def generate_audio_assets():
     parry = _gen_tone_seq([660, 990], dur_each=0.09, amp=0.3, wave_type="sine", sr=sr)
     _write_wav("assets/audio/parry.wav", parry, sr)
 
-    # 4. BGM Dungeon (dark minor ambient loop ~8s)
-    dungeon_notes = [110, 130.8, 146.8, 123.5, 110, 164.8, 146.8, 130.8] * 2
-    _write_wav("assets/audio/bgm_dungeon.wav", _gen_tone_seq(dungeon_notes, 0.48, 0.20, "tri", sr), sr)
-
-    # 5. BGM Boss (tense rhythmic bass loop)
-    boss_notes = [98, 98, 116.5, 110, 98, 130.8, 146.8, 116.5] * 2
-    _write_wav("assets/audio/bgm_boss.wav", _gen_tone_seq(boss_notes, 0.32, 0.25, "tri", sr), sr)
-
-    # 6. Heartbeat BGM untuk Ruang Takhta Obsidian (GDD Bab 6: "hanya suara detak jantung berirama")
-    hb = []
-    beat_len = int(sr * 1.1)
-    for i in range(beat_len):
+    # 4. Laser Charge & Beam SFX (Skull Lasers)
+    laser = []
+    for i in range(int(sr * 0.42)):
         t = i / sr
-        pulse1 = math.exp(-((t - 0.12) / 0.035) ** 2) * math.sin(2 * math.pi * 55 * t)
-        pulse2 = math.exp(-((t - 0.30) / 0.04) ** 2) * math.sin(2 * math.pi * 48 * t) * 0.75
-        hb.append((pulse1 + pulse2) * 0.55)
-    _write_wav("assets/audio/bgm_throne.wav", hb, sr)
+        env = min(1.0, t / 0.04) * (1.0 - t / 0.42) ** 0.8
+        buzz = math.sin(2 * math.pi * (240 + 420 * math.sin(t * 25)) * t) * 0.45
+        sub = math.sin(2 * math.pi * 95 * t) * 0.4
+        laser.append((buzz + sub) * 0.38 * env)
+    _write_wav("assets/audio/laser.wav", laser, sr)
 
-    # 7. Good Ending & Bad Ending stingers
+    # 5. Main Lobby BGM: Calm Zelda-like Village Theme (~14.4s loop, F major / warm flute + harp arpeggios)
+    def render_village(buf, sample_rate, n):
+        beat = 0.60  # 100 BPM santai
+        chords = [
+            (174.61, 220.00, 261.63, 349.23),  # F
+            (130.81, 196.00, 261.63, 329.63),  # C
+            (146.83, 220.00, 261.63, 349.23),  # Dm7
+            (116.54, 174.61, 233.08, 293.66),  # Bb
+            (174.61, 220.00, 261.63, 349.23),  # F
+            (130.81, 196.00, 261.63, 329.63),  # C
+        ]
+        melody = [
+            (0.0, 523.25, 1.1), (1.2, 587.33, 0.55), (1.8, 659.25, 0.55),
+            (2.4, 587.33, 1.1), (3.6, 523.25, 0.55), (4.2, 440.00, 0.55),
+            (4.8, 392.00, 1.1), (6.0, 440.00, 0.55), (6.6, 523.25, 0.55),
+            (7.2, 466.16, 1.1), (8.4, 440.00, 0.55), (9.0, 392.00, 0.55),
+            (9.6, 440.00, 0.8), (10.5, 523.25, 0.8), (11.4, 587.33, 0.6),
+            (12.0, 523.25, 1.6), (13.6, 392.00, 0.7),
+        ]
+        for ci, chord in enumerate(chords):
+            t0 = ci * 4 * beat
+            _add_voice(buf, sample_rate, t0, 4 * beat, chord[0] * 0.5, amp=0.14, timbre="flute")
+            for step in range(8):
+                note = chord[step % 4]
+                _add_voice(buf, sample_rate, t0 + step * (beat * 0.5), 0.75, note, amp=0.13, timbre="harp")
+        for st, freq, dur in melody:
+            _add_voice(buf, sample_rate, st, dur, freq, amp=0.18, timbre="flute", vibrato=0.006)
+
+    _write_wav("assets/audio/bgm_village.wav", _mix_track(14.4, sr, render_village), sr)
+
+    # 6. Dungeon Battle BGM: Energetic & Anticipatory Fighting Theme (~11.52s loop, 125 BPM D minor)
+    def render_battle(buf, sample_rate, n):
+        step = 0.24  # 8th note at 125 BPM
+        bass_pat = [146.83, 146.83, 174.61, 146.83, 196.00, 146.83, 220.00, 174.61]
+        lead_seq = [
+            (0, 587.33, 0.42), (2, 659.25, 0.42), (4, 698.46, 0.45), (6, 880.00, 0.65),
+            (8, 783.99, 0.42), (10, 698.46, 0.42), (12, 659.25, 0.45), (14, 587.33, 0.65),
+            (16, 523.25, 0.42), (18, 587.33, 0.42), (20, 698.46, 0.45), (22, 659.25, 0.65),
+            (24, 587.33, 0.42), (26, 523.25, 0.42), (28, 440.00, 0.65), (32, 587.33, 0.42),
+            (34, 698.46, 0.42), (36, 880.00, 0.45), (38, 1046.50, 0.65), (40, 880.00, 0.45),
+            (42, 783.99, 0.42), (44, 659.25, 0.45), (46, 587.33, 0.55),
+        ]
+        for s in range(48):
+            t = s * step
+            b_freq = bass_pat[s % len(bass_pat)] * (0.89 if s >= 32 else 1.0)
+            _add_voice(buf, sample_rate, t, 0.22, b_freq * 0.5, amp=0.22, timbre="strings")
+            if s % 4 == 0:
+                _add_drum(buf, sample_rate, t, "kick", amp=0.34)
+            elif s % 4 == 2:
+                _add_drum(buf, sample_rate, t, "snare", amp=0.24)
+            else:
+                _add_drum(buf, sample_rate, t, "hat", amp=0.12)
+        for idx_s, freq, dur in lead_seq:
+            _add_voice(buf, sample_rate, idx_s * step, dur, freq, amp=0.19, timbre="strings", vibrato=0.008)
+
+    battle_wav = _mix_track(11.52, sr, render_battle)
+    _write_wav("assets/audio/bgm_dungeon.wav", battle_wav, sr)
+    _write_wav("assets/audio/bgm_boss.wav", battle_wav, sr)
+
+    # 7. Final Boss Domain BGM: Oppressive, Dreadful & Intense (~12.0s loop, C minor tritone + heavy war drums)
+    def render_final_domain(buf, sample_rate, n):
+        step = 0.20  # Urgent 150 BPM feel
+        drone_roots = [65.41, 65.41, 61.74, 69.30]  # C2 -> B1 -> Db2 dark tension
+        for bar in range(4):
+            t0 = bar * 3.0
+            r = drone_roots[bar]
+            _add_voice(buf, sample_rate, t0, 3.0, r, amp=0.26, timbre="organ")
+            _add_voice(buf, sample_rate, t0, 3.0, r * 2.828, amp=0.11, timbre="organ")  # Tritone dread
+            _add_voice(buf, sample_rate, t0 + 0.6, 2.2, r * 3.17, amp=0.09, timbre="strings")
+        motif = [261.63, 311.13, 293.66, 277.18, 261.63, 196.00, 207.65, 185.00]
+        for s in range(60):
+            t = s * step
+            m = motif[s % len(motif)]
+            _add_voice(buf, sample_rate, t, 0.18, m, amp=0.16, timbre="strings")
+            if s % 4 in (0, 1):
+                _add_drum(buf, sample_rate, t, "kick", amp=0.40 if s % 4 == 0 else 0.26)
+            if s % 4 == 2:
+                _add_drum(buf, sample_rate, t, "snare", amp=0.25)
+
+    _write_wav("assets/audio/bgm_throne.wav", _mix_track(12.0, sr, render_final_domain), sr)
+
+    # 8. Good Ending & Bad Ending stingers
     _write_wav("assets/audio/ending_good.wav", _gen_tone_seq([261.6, 329.6, 392.0, 523.2, 659.2], 0.45, 0.28, "sine", sr), sr)
     _write_wav("assets/audio/ending_bad.wav", _gen_tone_seq([146.8, 138.6, 116.5, 98.0, 73.4], 0.50, 0.28, "tri", sr), sr)
-    print("Generated all procedural GDD audio files.")
+    print("Generated all rich Village/Dungeon/Domain BGM & SFX audio files.")
+
+
+# =============================================================================
+# 5. GENERATOR ASET BARU: SKULL LASER BOSS, API PUTIH, & POTION ICONS
+# =============================================================================
+def _draw_skull_frame(size, frame_idx, charging=False):
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    cx, cy = size // 2, size // 2 + int(math.sin(frame_idx * math.pi / 2) * 2)
+    glow_col = (255, 55, 95, 115) if charging else (175, 65, 225, 70)
+    d.ellipse([cx - 18, cy - 18, cx + 18, cy + 18], fill=glow_col)
+
+    # Cranium obsidian-bone
+    d.ellipse([cx - 13, cy - 14, cx + 13, cy + 6], fill=(215, 210, 225, 255), outline=(28, 22, 34, 255))
+    d.ellipse([cx - 11, cy - 12, cx + 11, cy + 3], fill=(235, 232, 242, 255))
+    # Jaw (terbuka saat charging laser)
+    jaw_drop = 4 if charging else 0
+    d.rectangle([cx - 8, cy + 3 + jaw_drop, cx + 8, cy + 12 + jaw_drop], fill=(195, 190, 208, 255), outline=(28, 22, 34, 255))
+    for tx in (-5, -1, 3):
+        d.rectangle([cx + tx, cy + 4 + jaw_drop, cx + tx + 2, cy + 9 + jaw_drop], fill=(245, 245, 250, 255))
+    # Rongga mata + nyala laser
+    eye_col = (255, 65, 85, 255) if charging else (210, 80, 255, 255)
+    for ex in (-5, 5):
+        d.ellipse([cx + ex - 4, cy - 6, cx + ex + 4, cy + 1], fill=(24, 16, 30, 255))
+        d.ellipse([cx + ex - 2, cy - 4, cx + ex + 2, cy - 1], fill=eye_col)
+    # Mulut/laser core saat charge
+    if charging:
+        d.ellipse([cx - 5, cy + 2, cx + 5, cy + 10], fill=(255, 120, 140, 255))
+        d.ellipse([cx - 3, cy + 4, cx + 3, cy + 8], fill=(255, 245, 245, 255))
+    return img
+
+
+def _draw_white_fire_frame(size, frame_idx):
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    cx, cy = size // 2, size // 2
+    r_aura = 15 + (frame_idx % 3)
+    d.ellipse([cx - r_aura, cy - r_aura + 2, cx + r_aura, cy + r_aura + 2], fill=(200, 245, 255, 55))
+    # Altar batu pualam
+    d.ellipse([cx - 11, cy + 4, cx + 11, cy + 14], fill=(120, 130, 145, 255), outline=(35, 40, 52, 255))
+    d.ellipse([cx - 8, cy + 6, cx + 8, cy + 12], fill=(65, 75, 92, 255))
+    # Lidah api putih & biru muda
+    sway = int(math.sin(frame_idx * math.pi / 3) * 2)
+    h = 15 + (frame_idx % 2) * 3
+    d.polygon([(cx - 8, cy + 9), (cx + 8, cy + 9), (cx + sway, cy + 9 - h)], fill=(155, 235, 255, 235))
+    d.polygon([(cx - 5, cy + 9), (cx + 5, cy + 9), (cx - sway // 2, cy + 9 - int(h * 0.78))], fill=(242, 252, 255, 255))
+    d.ellipse([cx - 3, cy + 2, cx + 3, cy + 9], fill=(255, 255, 255, 255))
+    return img
+
+
+def _draw_potion_icon(main_col, hi_col, badge_col=None):
+    img = Image.new("RGBA", (24, 24), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.rectangle([2, 2, 21, 21], fill=(22, 24, 34, 235), outline=(95, 100, 120, 255))
+    # Leher botol & sumbat gabus
+    d.rectangle([9, 4, 14, 6], fill=(175, 120, 70, 255))
+    d.rectangle([9, 6, 14, 9], fill=(195, 215, 235, 255), outline=(45, 50, 65, 255))
+    # Badan labu ramuan
+    d.ellipse([6, 8, 17, 19], fill=main_col, outline=(25, 25, 35, 255))
+    d.ellipse([8, 10, 12, 14], fill=hi_col)
+    if badge_col:
+        d.line([15, 17, 19, 13], fill=badge_col, width=2)
+        d.line([17, 12, 17, 18], fill=badge_col, width=1)
+    return img
+
+
+def generate_special_gameplay_assets():
+    os.makedirs("character/boss_skull", exist_ok=True)
+    idle_frames = [_draw_skull_frame(44, i, charging=False) for i in range(4)]
+    charge_frames = [_draw_skull_frame(44, i, charging=True) for i in range(4)]
+    idle_frames[0].save("character/boss_skull/idle.gif", save_all=True, append_images=idle_frames[1:], duration=140, loop=0, disposal=2)
+    charge_frames[0].save("character/boss_skull/charge.gif", save_all=True, append_images=charge_frames[1:], duration=100, loop=0, disposal=2)
+
+    os.makedirs("assets/effects", exist_ok=True)
+    wf_frames = [_draw_white_fire_frame(36, i) for i in range(6)]
+    wf_frames[0].save("assets/effects/white_fire.gif", save_all=True, append_images=wf_frames[1:], duration=110, loop=0, disposal=2)
+
+    os.makedirs("assets/items", exist_ok=True)
+    _draw_potion_icon((220, 48, 68, 255), (255, 150, 165, 255)).save("assets/items/potion_hp.png")
+    _draw_potion_icon((42, 178, 92, 255), (150, 245, 175, 255)).save("assets/items/potion_stamina.png")
+    _draw_potion_icon((235, 95, 35, 255), (255, 200, 100, 255), (255, 235, 120, 255)).save("assets/items/potion_atk.png")
+    _draw_potion_icon((65, 145, 235, 255), (165, 220, 255, 255), (210, 240, 255, 255)).save("assets/items/potion_def.png")
+    _draw_potion_icon((185, 75, 225, 255), (240, 165, 255, 255), (255, 220, 110, 255)).save("assets/items/potion_crit.png")
+    print("Generated Skull Boss GIFs, White Fire GIF, and Potion icons.")
 
 
 if __name__ == "__main__":
@@ -621,3 +844,4 @@ if __name__ == "__main__":
     generate_5_stage_maps()
     generate_characters_and_bosses()
     generate_audio_assets()
+    generate_special_gameplay_assets()

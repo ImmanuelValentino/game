@@ -14,6 +14,9 @@ from PIL import Image
 from src.config import (
     WEAPON_DATABASE, compute_level_stats,
     DODGE_ROLL_STAMINA, STAMINA_REGEN_RATE, STAMINA_REGEN_DELAY,
+    ATTACK_BOOST_MULT, ATTACK_BOOST_DURATION,
+    DEFENSE_BOOST_FLAT, DEFENSE_BOOST_DURATION,
+    CRIT_BOOST_FLAT, CRIT_BOOST_DURATION,
 )
 from src.audio import audio_manager
 
@@ -115,6 +118,13 @@ class Player:
         self.dodged_last_hit = False
         self.perfect_dodge_slowmo_timer = 0.0
         self.next_attack_crit_buff = False
+        self.atk_boost_timer = 0.0
+        self.atk_boost_mult = 1.0
+        self.def_boost_timer = 0.0
+        self.def_boost_flat = 0
+        self.crit_boost_timer = 0.0
+        self.crit_boost_flat = 0.0
+        self.in_white_fire = False
         self.stagger_timer = 0.0
         self.is_sprinting = False
 
@@ -132,12 +142,21 @@ class Player:
         self.knockback_vx = 0.0
         self.knockback_vy = 0.0
 
+        # Buff Potion Sementara & Status Api Putih
+        self.atk_boost_timer = 0.0
+        self.atk_boost_mult = 1.0
+        self.def_boost_timer = 0.0
+        self.def_boost_flat = 0
+        self.crit_boost_timer = 0.0
+        self.crit_boost_flat = 0.0
+        self.in_white_fire = False
+
         self.is_moving = False
         self.is_dead = False
 
     @property
     def armor(self):
-        return self._armor + self.bonus_def + self.skill_levels["defense"] * 5
+        return self._armor + self.bonus_def + self.skill_levels["defense"] * 5 + self.def_boost_flat
 
     @armor.setter
     def armor(self, value):
@@ -157,7 +176,24 @@ class Player:
 
     @property
     def total_damage(self):
-        return self.base_damage + self.weapon_atk + self.bonus_damage + self.skill_levels["power"] * 12
+        raw = self.base_damage + self.weapon_atk + self.bonus_damage + self.skill_levels["power"] * 12
+        return int(round(raw * self.atk_boost_mult))
+
+    @property
+    def effective_crit_chance(self):
+        return min(0.95, self.crit_chance + self.crit_boost_flat)
+
+    def apply_atk_boost(self, mult=ATTACK_BOOST_MULT, duration=ATTACK_BOOST_DURATION):
+        self.atk_boost_mult = max(self.atk_boost_mult, float(mult))
+        self.atk_boost_timer = float(duration)
+
+    def apply_def_boost(self, bonus=DEFENSE_BOOST_FLAT, duration=DEFENSE_BOOST_DURATION):
+        self.def_boost_flat = max(self.def_boost_flat, int(bonus))
+        self.def_boost_timer = float(duration)
+
+    def apply_crit_boost(self, bonus=CRIT_BOOST_FLAT, duration=CRIT_BOOST_DURATION):
+        self.crit_boost_flat = max(self.crit_boost_flat, float(bonus))
+        self.crit_boost_timer = float(duration)
 
     @property
     def skill_level(self):
@@ -280,6 +316,23 @@ class Player:
             self.stagger_timer = max(0.0, self.stagger_timer - dt)
         if self.perfect_dodge_slowmo_timer > 0:
             self.perfect_dodge_slowmo_timer = max(0.0, self.perfect_dodge_slowmo_timer - dt)
+
+        # Countdown timer buff ramuan (Attack Boost 15s, Defense Boost 20s, Crit Focus 20s)
+        if self.atk_boost_timer > 0:
+            self.atk_boost_timer = max(0.0, self.atk_boost_timer - dt)
+            if self.atk_boost_timer == 0.0:
+                self.atk_boost_mult = 1.0
+        if self.def_boost_timer > 0:
+            self.def_boost_timer = max(0.0, self.def_boost_timer - dt)
+            if self.def_boost_timer == 0.0:
+                self.def_boost_flat = 0
+        if self.crit_boost_timer > 0:
+            self.crit_boost_timer = max(0.0, self.crit_boost_timer - dt)
+            if self.crit_boost_timer == 0.0:
+                self.crit_boost_flat = 0.0
+
+        # Tidak ada regenerasi HP otomatis; diset ulang tiap frame sebelum cek WhiteFlame
+        self.in_white_fire = False
 
         # Deteksi Hazard Lingkungan di kaki Ethan
         hazards, conv_vx = map_loader.get_hazards_at(self.get_hitbox())
@@ -517,6 +570,13 @@ class Player:
         self.knockback_vy = 0.0
         self.perfect_dodge_slowmo_timer = 0.0
         self.next_attack_crit_buff = False
+        self.atk_boost_timer = 0.0
+        self.atk_boost_mult = 1.0
+        self.def_boost_timer = 0.0
+        self.def_boost_flat = 0
+        self.crit_boost_timer = 0.0
+        self.crit_boost_flat = 0.0
+        self.in_white_fire = False
 
         lost_ash = int(self.monster_ash * 0.3)
         self.monster_ash = max(0, self.monster_ash - lost_ash)
@@ -548,7 +608,13 @@ class Player:
         else:
             surface.blit(frame, (draw_x, draw_y))
 
-        # Indikator cincin emas jika Perfect Dodge Crit Buff aktif
+        # Indikator aura visual jika buff aktif
+        cx, cy = int(self.x + 24 - camera_x), int(self.y + 24 - camera_y)
         if self.next_attack_crit_buff:
-            cx, cy = int(self.x + 24 - camera_x), int(self.y + 24 - camera_y)
             pygame.draw.circle(surface, (110, 220, 255), (cx, cy), 24, 1)
+        if self.atk_boost_timer > 0:
+            pygame.draw.circle(surface, (255, 110, 50), (cx, cy), 26, 2)
+        if self.def_boost_timer > 0:
+            pygame.draw.circle(surface, (90, 175, 255), (cx, cy), 22, 1)
+        if self.in_white_fire:
+            pygame.draw.circle(surface, (220, 250, 255), (cx, cy), 28, 1)
