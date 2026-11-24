@@ -65,11 +65,17 @@
       return rects;
     }
 
-    getTutorialCloseRect(viewW, viewH) {
+    getTutorialGeometry(viewW, viewH) {
       const cw = 285;
       const ch = 166;
       const cx = 20;
-      const cy = viewH - ch - 20;
+      const { barX } = this.getHotbarGeometry(viewW, viewH);
+      const cy = barX < cx + cw + 12 ? viewH - ch - 92 : viewH - ch - 20;
+      return { cx, cy, cw, ch };
+    }
+
+    getTutorialCloseRect(viewW, viewH) {
+      const { cx, cy, cw } = this.getTutorialGeometry(viewW, viewH);
       return { x: cx + cw - 24, y: cy + 4, w: 20, h: 20 };
     }
 
@@ -555,10 +561,7 @@
     }
 
     _drawTutorialCard(ctx, viewW, viewH) {
-      const cw = 285;
-      const ch = 166;
-      const cx = 20;
-      const cy = viewH - ch - 20;
+      const { cx, cy, cw, ch } = this.getTutorialGeometry(viewW, viewH);
 
       C.drawRoundedRect(ctx, cx, cy, cw, ch, 9, "rgba(16, 18, 28, 0.85)", C.COLOR_PANEL_BORDER_LIGHT, 1);
       ctx.textAlign = "left";
