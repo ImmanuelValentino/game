@@ -1,0 +1,548 @@
+{
+  "player_east": {
+    "src": "assets/sprites_web/player_east.png",
+    "frameW": 48,
+    "frameH": 48,
+    "frameCount": 6,
+    "fps": 10
+  },
+  "monster1_east": {
+    "src": "assets/sprites_web/monster1_east.png",
+    "frameW": 44,
+    "frameH": 44,
+    "frameCount": 8,
+    "fps": 7
+  },
+  "monster_ranged_east": {
+    "src": "assets/sprites_web/monster_ranged_east.png",
+    "frameW": 44,
+    "frameH": 44,
+    "frameCount": 9,
+    "fps": 7
+  },
+  "player_north": {
+    "src": "assets/sprites_web/player_north.png",
+    "frameW": 48,
+    "frameH": 48,
+    "frameCount": 6,
+    "fps": 10
+  },
+  "monster1_north": {
+    "src": "assets/sprites_web/monster1_north.png",
+    "frameW": 44,
+    "frameH": 44,
+    "frameCount": 8,
+    "fps": 7
+  },
+  "monster_ranged_north": {
+    "src": "assets/sprites_web/monster_ranged_north.png",
+    "frameW": 44,
+    "frameH": 44,
+    "frameCount": 9,
+    "fps": 7
+  },
+  "player_south": {
+    "src": "assets/sprites_web/player_south.png",
+    "frameW": 48,
+    "frameH": 48,
+    "frameCount": 6,
+    "fps": 10
+  },
+  "monster1_south": {
+    "src": "assets/sprites_web/monster1_south.png",
+    "frameW": 44,
+    "frameH": 44,
+    "frameCount": 8,
+    "fps": 7
+  },
+  "monster_ranged_south": {
+    "src": "assets/sprites_web/monster_ranged_south.png",
+    "frameW": 44,
+    "frameH": 44,
+    "frameCount": 9,
+    "fps": 7
+  },
+  "player_west": {
+    "src": "assets/sprites_web/player_west.png",
+    "frameW": 48,
+    "frameH": 48,
+    "frameCount": 6,
+    "fps": 10
+  },
+  "monster1_west": {
+    "src": "assets/sprites_web/monster1_west.png",
+    "frameW": 44,
+    "frameH": 44,
+    "frameCount": 8,
+    "fps": 7
+  },
+  "monster_ranged_west": {
+    "src": "assets/sprites_web/monster_ranged_west.png",
+    "frameW": 44,
+    "frameH": 44,
+    "frameCount": 9,
+    "fps": 7
+  },
+  "boss_demonKing_walk_east": {
+    "src": "assets/sprites_web/boss_demonKing_walk_east.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 8,
+    "fps": 7
+  },
+  "boss_demonKing_atk_east": {
+    "src": "assets/sprites_web/boss_demonKing_atk_east.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 6,
+    "fps": 11
+  },
+  "boss_demonKing_walk_north": {
+    "src": "assets/sprites_web/boss_demonKing_walk_north.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 8,
+    "fps": 7
+  },
+  "boss_demonKing_atk_north": {
+    "src": "assets/sprites_web/boss_demonKing_atk_north.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 6,
+    "fps": 11
+  },
+  "boss_demonKing_walk_south": {
+    "src": "assets/sprites_web/boss_demonKing_walk_south.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 8,
+    "fps": 7
+  },
+  "boss_demonKing_atk_south": {
+    "src": "assets/sprites_web/boss_demonKing_atk_south.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 6,
+    "fps": 11
+  },
+  "boss_demonKing_walk_west": {
+    "src": "assets/sprites_web/boss_demonKing_walk_west.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 8,
+    "fps": 7
+  },
+  "boss_demonKing_atk_west": {
+    "src": "assets/sprites_web/boss_demonKing_atk_west.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 6,
+    "fps": 11
+  },
+  "boss_gargantua_walk_east": {
+    "src": "assets/sprites_web/boss_gargantua_walk_east.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 8,
+    "fps": 7
+  },
+  "boss_gargantua_atk_east": {
+    "src": "assets/sprites_web/boss_gargantua_atk_east.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 8,
+    "fps": 11
+  },
+  "boss_gargantua_walk_north": {
+    "src": "assets/sprites_web/boss_gargantua_walk_north.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 8,
+    "fps": 7
+  },
+  "boss_gargantua_atk_north": {
+    "src": "assets/sprites_web/boss_gargantua_atk_north.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 8,
+    "fps": 11
+  },
+  "boss_gargantua_walk_south": {
+    "src": "assets/sprites_web/boss_gargantua_walk_south.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 8,
+    "fps": 7
+  },
+  "boss_gargantua_atk_south": {
+    "src": "assets/sprites_web/boss_gargantua_atk_south.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 8,
+    "fps": 11
+  },
+  "boss_gargantua_walk_west": {
+    "src": "assets/sprites_web/boss_gargantua_walk_west.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 8,
+    "fps": 7
+  },
+  "boss_gargantua_atk_west": {
+    "src": "assets/sprites_web/boss_gargantua_atk_west.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 8,
+    "fps": 11
+  },
+  "boss_vespa_walk_east": {
+    "src": "assets/sprites_web/boss_vespa_walk_east.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 8,
+    "fps": 8
+  },
+  "boss_vespa_atk_east": {
+    "src": "assets/sprites_web/boss_vespa_atk_east.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 6,
+    "fps": 11
+  },
+  "boss_vespa_walk_north": {
+    "src": "assets/sprites_web/boss_vespa_walk_north.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 8,
+    "fps": 8
+  },
+  "boss_vespa_atk_north": {
+    "src": "assets/sprites_web/boss_vespa_atk_north.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 6,
+    "fps": 11
+  },
+  "boss_vespa_walk_south": {
+    "src": "assets/sprites_web/boss_vespa_walk_south.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 8,
+    "fps": 8
+  },
+  "boss_vespa_atk_south": {
+    "src": "assets/sprites_web/boss_vespa_atk_south.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 6,
+    "fps": 11
+  },
+  "boss_vespa_walk_west": {
+    "src": "assets/sprites_web/boss_vespa_walk_west.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 8,
+    "fps": 8
+  },
+  "boss_vespa_atk_west": {
+    "src": "assets/sprites_web/boss_vespa_atk_west.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 6,
+    "fps": 11
+  },
+  "boss_ignis_walk_east": {
+    "src": "assets/sprites_web/boss_ignis_walk_east.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 8,
+    "fps": 8
+  },
+  "boss_ignis_atk_east": {
+    "src": "assets/sprites_web/boss_ignis_atk_east.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 6,
+    "fps": 11
+  },
+  "boss_ignis_walk_north": {
+    "src": "assets/sprites_web/boss_ignis_walk_north.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 8,
+    "fps": 8
+  },
+  "boss_ignis_atk_north": {
+    "src": "assets/sprites_web/boss_ignis_atk_north.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 6,
+    "fps": 11
+  },
+  "boss_ignis_walk_south": {
+    "src": "assets/sprites_web/boss_ignis_walk_south.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 8,
+    "fps": 8
+  },
+  "boss_ignis_atk_south": {
+    "src": "assets/sprites_web/boss_ignis_atk_south.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 6,
+    "fps": 11
+  },
+  "boss_ignis_walk_west": {
+    "src": "assets/sprites_web/boss_ignis_walk_west.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 8,
+    "fps": 8
+  },
+  "boss_ignis_atk_west": {
+    "src": "assets/sprites_web/boss_ignis_atk_west.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 6,
+    "fps": 11
+  },
+  "boss_valerius_walk_east": {
+    "src": "assets/sprites_web/boss_valerius_walk_east.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 6,
+    "fps": 8
+  },
+  "boss_valerius_atk_east": {
+    "src": "assets/sprites_web/boss_valerius_atk_east.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 9,
+    "fps": 11
+  },
+  "boss_valerius_walk_north": {
+    "src": "assets/sprites_web/boss_valerius_walk_north.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 6,
+    "fps": 8
+  },
+  "boss_valerius_atk_north": {
+    "src": "assets/sprites_web/boss_valerius_atk_north.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 9,
+    "fps": 11
+  },
+  "boss_valerius_walk_south": {
+    "src": "assets/sprites_web/boss_valerius_walk_south.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 6,
+    "fps": 8
+  },
+  "boss_valerius_atk_south": {
+    "src": "assets/sprites_web/boss_valerius_atk_south.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 9,
+    "fps": 11
+  },
+  "boss_valerius_walk_west": {
+    "src": "assets/sprites_web/boss_valerius_walk_west.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 6,
+    "fps": 8
+  },
+  "boss_valerius_atk_west": {
+    "src": "assets/sprites_web/boss_valerius_atk_west.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 9,
+    "fps": 11
+  },
+  "boss_hollow_crown_walk_east": {
+    "src": "assets/sprites_web/boss_hollow_crown_walk_east.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 6,
+    "fps": 7
+  },
+  "boss_hollow_crown_atk_east": {
+    "src": "assets/sprites_web/boss_hollow_crown_atk_east.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 6,
+    "fps": 11
+  },
+  "boss_hollow_crown_walk_north": {
+    "src": "assets/sprites_web/boss_hollow_crown_walk_north.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 6,
+    "fps": 7
+  },
+  "boss_hollow_crown_atk_north": {
+    "src": "assets/sprites_web/boss_hollow_crown_atk_north.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 6,
+    "fps": 11
+  },
+  "boss_hollow_crown_walk_south": {
+    "src": "assets/sprites_web/boss_hollow_crown_walk_south.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 6,
+    "fps": 7
+  },
+  "boss_hollow_crown_atk_south": {
+    "src": "assets/sprites_web/boss_hollow_crown_atk_south.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 6,
+    "fps": 11
+  },
+  "boss_hollow_crown_walk_west": {
+    "src": "assets/sprites_web/boss_hollow_crown_walk_west.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 6,
+    "fps": 7
+  },
+  "boss_hollow_crown_atk_west": {
+    "src": "assets/sprites_web/boss_hollow_crown_atk_west.png",
+    "frameW": 60,
+    "frameH": 60,
+    "frameCount": 6,
+    "fps": 11
+  },
+  "slime": {
+    "src": "assets/sprites_web/slime.png",
+    "frameW": 36,
+    "frameH": 36,
+    "frameCount": 4,
+    "fps": 6
+  },
+  "boss_skull_idle": {
+    "src": "assets/sprites_web/boss_skull_idle.png",
+    "frameW": 64,
+    "frameH": 64,
+    "frameCount": 4,
+    "fps": 9
+  },
+  "boss_skull_charge": {
+    "src": "assets/sprites_web/boss_skull_charge.png",
+    "frameW": 64,
+    "frameH": 64,
+    "frameCount": 4,
+    "fps": 9
+  },
+  "white_fire": {
+    "src": "assets/sprites_web/white_fire.png",
+    "frameW": 44,
+    "frameH": 44,
+    "frameCount": 6,
+    "fps": 10
+  },
+  "npc_vektor": {
+    "src": "assets/sprites_web/npc_vektor.png",
+    "frameW": 46,
+    "frameH": 46,
+    "frameCount": 4,
+    "fps": 4
+  },
+  "npc_aell": {
+    "src": "assets/sprites_web/npc_aell.png",
+    "frameW": 42,
+    "frameH": 42,
+    "frameCount": 9,
+    "fps": 4
+  },
+  "npc_aell_east": {
+    "src": "assets/sprites_web/npc_aell_east.png",
+    "frameW": 48,
+    "frameH": 48,
+    "frameCount": 9,
+    "fps": 6
+  },
+  "npc_gael": {
+    "src": "assets/sprites_web/npc_gael.png",
+    "frameW": 46,
+    "frameH": 46,
+    "frameCount": 4,
+    "fps": 4
+  },
+  "npc_boy": {
+    "src": "assets/sprites_web/npc_boy.png",
+    "frameW": 36,
+    "frameH": 36,
+    "frameCount": 4,
+    "fps": 4
+  },
+  "npc_girl": {
+    "src": "assets/sprites_web/npc_girl.png",
+    "frameW": 36,
+    "frameH": 36,
+    "frameCount": 1,
+    "fps": 1
+  },
+  "npc_elara": {
+    "src": "assets/sprites_web/npc_elara.png",
+    "frameW": 32,
+    "frameH": 32,
+    "frameCount": 1,
+    "fps": 1
+  },
+  "npc_brog": {
+    "src": "assets/sprites_web/npc_brog.png",
+    "frameW": 32,
+    "frameH": 32,
+    "frameCount": 1,
+    "fps": 1
+  },
+  "npc_guard": {
+    "src": "assets/sprites_web/npc_guard.png",
+    "frameW": 32,
+    "frameH": 32,
+    "frameCount": 1,
+    "fps": 1
+  },
+  "portrait_vektor": {
+    "src": "assets/sprites_web/portrait_vektor.png",
+    "frameW": 80,
+    "frameH": 80,
+    "frameCount": 1,
+    "fps": 1
+  },
+  "portrait_gael": {
+    "src": "assets/sprites_web/portrait_gael.png",
+    "frameW": 80,
+    "frameH": 80,
+    "frameCount": 1,
+    "fps": 1
+  },
+  "portrait_elara": {
+    "src": "assets/sprites_web/portrait_elara.png",
+    "frameW": 80,
+    "frameH": 80,
+    "frameCount": 1,
+    "fps": 1
+  },
+  "portrait_brog": {
+    "src": "assets/sprites_web/portrait_brog.png",
+    "frameW": 80,
+    "frameH": 80,
+    "frameCount": 1,
+    "fps": 1
+  },
+  "portrait_guard": {
+    "src": "assets/sprites_web/portrait_guard.png",
+    "frameW": 80,
+    "frameH": 80,
+    "frameCount": 1,
+    "fps": 1
+  }
+}

@@ -1,13 +1,14 @@
-# Python bytecode & caches
-__pycache__/
-*.py[cod]
-*$py.class
-.pytest_cache/
-
-# Local runtime save data
+# Runtime save data (keep saves/.htaccess tracked)
+saves/*.json
+!saves/.htaccess
 savegame.json
 
-# Virtual environments & IDE
+# Python / OS / IDE leftovers
+__pycache__/
+*.py[cod]
+.pytest_cache/
 .venv/
 venv/
 .vscode/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,20 @@
+DirectoryIndex index.html
+Options -Indexes
+
+<IfModule mod_mime.c>
+    AddType application/json .json
+    AddType audio/wav .wav
+    AddType image/png .png
+</IfModule>
+
+<FilesMatch "\.(json|png|wav)$">
+    <IfModule mod_headers.c>
+        Header set Cache-Control "public, max-age=3600"
+    </IfModule>
+</FilesMatch>
+
+<FilesMatch "\.php$">
+    <IfModule mod_headers.c>
+        Header set Cache-Control "no-store, no-cache, must-revalidate"
+    </IfModule>
+</FilesMatch>
